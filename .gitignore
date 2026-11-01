@@ -1,0 +1,9 @@
+# Compilación de Cargo
+/target/
+
+# Editores y sistema
+.vscode/
+.idea/
+*.swp
+*~
+.DS_Store

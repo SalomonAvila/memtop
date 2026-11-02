@@ -15,7 +15,7 @@ use std::{
 };
 
 use anyhow::{Context, Result};
-use sysinfo::{Components, Disks, Networks, Pid, ProcessesToUpdate, System, Users};
+use sysinfo::{Components, Disks, Networks, Pid, ProcessStatus, ProcessesToUpdate, System, Users};
 
 use crate::gpu::{self, Gpu};
 
@@ -97,9 +97,44 @@ pub struct Proceso {
     pub comando: String,
     pub cpu: f32,
     pub memoria: u64,
-    pub estado: String,
+    pub estado: EstadoProceso,
     /// Segundos de CPU consumidos (TIME+ de htop).
     pub tiempo: u64,
+}
+
+/// Estado de un proceso, agrupando los de `sysinfo` en nombres cortos y traducibles.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EstadoProceso {
+    Ejecutando,
+    Durmiendo,
+    Inactivo,
+    /// Esperando E/S de disco sin poder interrumpirse (estado `D`).
+    EsperaDisco,
+    Detenido,
+    Zombi,
+    Otro,
+}
+
+impl From<ProcessStatus> for EstadoProceso {
+    fn from(s: ProcessStatus) -> Self {
+        match s {
+            ProcessStatus::Run | ProcessStatus::Waking => Self::Ejecutando,
+            ProcessStatus::Sleep => Self::Durmiendo,
+            ProcessStatus::Idle | ProcessStatus::Parked => Self::Inactivo,
+            ProcessStatus::UninterruptibleDiskSleep => Self::EsperaDisco,
+            ProcessStatus::Stop | ProcessStatus::Tracing => Self::Detenido,
+            ProcessStatus::Zombie | ProcessStatus::Dead => Self::Zombi,
+            _ => Self::Otro,
+        }
+    }
+}
+
+/// Por qué no se pudo enviar una señal a un proceso.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ErrorSenal {
+    NoExiste,
+    SinPermiso,
+    NoSoportada,
 }
 
 pub struct Bateria {
@@ -312,7 +347,7 @@ impl Monitor {
                     comando,
                     cpu: p.cpu_usage().min(100.0 * nucleos),
                     memoria: p.memory(),
-                    estado: p.status().to_string(),
+                    estado: EstadoProceso::from(p.status()),
                     tiempo: p.accumulated_cpu_time() / 1000,
                 }
             })
@@ -354,12 +389,12 @@ impl Monitor {
         );
     }
 
-    /// Envía una señal a un proceso. Devuelve `Err` con el motivo si falla.
-    pub fn senal(&self, pid: u32, forzar: bool) -> Result<(), String> {
+    /// Envía SIGTERM (o SIGKILL si `forzar`) a un proceso.
+    pub fn senal(&self, pid: u32, forzar: bool) -> Result<(), ErrorSenal> {
         let p = self
             .sys
             .process(Pid::from_u32(pid))
-            .ok_or("el proceso ya no existe")?;
+            .ok_or(ErrorSenal::NoExiste)?;
         let s = if forzar {
             sysinfo::Signal::Kill
         } else {
@@ -367,8 +402,8 @@ impl Monitor {
         };
         match p.kill_with(s) {
             Some(true) => Ok(()),
-            Some(false) => Err("sin permiso (¿es de otro usuario?)".into()),
-            None => Err("señal no soportada".into()),
+            Some(false) => Err(ErrorSenal::SinPermiso),
+            None => Err(ErrorSenal::NoSoportada),
         }
     }
 
@@ -762,6 +797,30 @@ mod tests {
         assert_eq!(fmt_duracion(59), "0 min");
         assert_eq!(fmt_duracion(3 * 3600 + 5 * 60), "3 h 5 min");
         assert_eq!(fmt_duracion(2 * 86400 + 3600), "2 d 1 h 0 min");
+    }
+
+    #[test]
+    fn agrupa_los_estados_de_proceso() {
+        assert_eq!(
+            EstadoProceso::from(ProcessStatus::Run),
+            EstadoProceso::Ejecutando
+        );
+        assert_eq!(
+            EstadoProceso::from(ProcessStatus::Sleep),
+            EstadoProceso::Durmiendo
+        );
+        assert_eq!(
+            EstadoProceso::from(ProcessStatus::UninterruptibleDiskSleep),
+            EstadoProceso::EsperaDisco
+        );
+        assert_eq!(
+            EstadoProceso::from(ProcessStatus::Zombie),
+            EstadoProceso::Zombi
+        );
+        assert_eq!(
+            EstadoProceso::from(ProcessStatus::Unknown(99)),
+            EstadoProceso::Otro
+        );
     }
 
     #[test]

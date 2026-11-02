@@ -11,7 +11,7 @@ use crate::{
     config::Config,
     foto::Fotos,
     gpu, i18n,
-    sistema::{Monitor, Proceso},
+    sistema::{ErrorSenal, Monitor, Proceso},
 };
 
 /// Pestañas del panel derecho, en el orden en que se muestran (teclas `1`–`7`).
@@ -260,15 +260,27 @@ impl App {
                     k.code,
                     KeyCode::Char('s' | 'S' | 'y' | 'Y') | KeyCode::Enter
                 ) {
+                    let t = i18n::t();
                     match self.monitor.senal(pid, forzar) {
                         Ok(()) => self.avisar(
                             format!(
-                                "{} enviado a {nombre} ({pid})",
-                                if forzar { "SIGKILL" } else { "SIGTERM" }
+                                "{} {} {nombre} ({pid})",
+                                if forzar { "SIGKILL" } else { "SIGTERM" },
+                                t.aviso_enviado_a
                             ),
                             false,
                         ),
-                        Err(e) => self.avisar(format!("No se pudo terminar {nombre}: {e}"), true),
+                        Err(e) => {
+                            let motivo = match e {
+                                ErrorSenal::NoExiste => t.senal_no_existe,
+                                ErrorSenal::SinPermiso => t.senal_sin_permiso,
+                                ErrorSenal::NoSoportada => t.senal_no_soportada,
+                            };
+                            self.avisar(
+                                format!("{} {nombre}: {motivo}", t.aviso_no_se_pudo_terminar),
+                                true,
+                            )
+                        }
                     }
                 }
                 self.modo = Modo::Normal;

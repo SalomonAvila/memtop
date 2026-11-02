@@ -225,6 +225,67 @@ pub struct Textos {
     pub col_interfaz: &'static str,
     pub col_ahora: &'static str,
     pub col_total: &'static str,
+
+    // Pestaña Procesos
+    pub col_tiempo_cpu: &'static str,
+    pub col_comando: &'static str,
+    pub solo_mios: &'static str,
+
+    // Estados de proceso
+    pub proc_ejecutando: &'static str,
+    pub proc_durmiendo: &'static str,
+    pub proc_inactivo: &'static str,
+    pub proc_espera_disco: &'static str,
+    pub proc_detenido: &'static str,
+    pub proc_zombi: &'static str,
+    pub proc_otro: &'static str,
+
+    // Pie de atajos
+    pub pie_aceptar: &'static str,
+    pub pie_borrar: &'static str,
+    pub pie_mover: &'static str,
+    pub pie_buscar: &'static str,
+    pub pie_ordenar: &'static str,
+    pub pie_terminar: &'static str,
+    pub pie_matar: &'static str,
+    pub pie_pestana: &'static str,
+    pub pie_ir_a: &'static str,
+    pub pie_otra_foto: &'static str,
+    pub pie_pausa: &'static str,
+    pub pie_ayuda: &'static str,
+    pub pie_salir: &'static str,
+    pub tecla_espacio: &'static str,
+
+    // Ventana de confirmación
+    pub confirmar_titulo: &'static str,
+    pub confirmar_enviar: &'static str,
+    pub confirmar_a: &'static str,
+    pub confirmar_forzar: &'static str,
+    pub confirmar_opciones: &'static str,
+
+    // Avisos al enviar señales
+    pub aviso_enviado_a: &'static str,
+    pub aviso_no_se_pudo_terminar: &'static str,
+    pub senal_no_existe: &'static str,
+    pub senal_sin_permiso: &'static str,
+    pub senal_no_soportada: &'static str,
+
+    // Ventana de ayuda
+    pub ayuda_titulo: &'static str,
+    pub ayuda_general: &'static str,
+    pub ayuda_cambiar_pestana: &'static str,
+    pub ayuda_ir_pestana: &'static str,
+    pub ayuda_foto: &'static str,
+    pub ayuda_pausa: &'static str,
+    pub ayuda_salir: &'static str,
+    pub ayuda_mover: &'static str,
+    pub ayuda_buscar: &'static str,
+    pub ayuda_ordenar: &'static str,
+    pub ayuda_invertir: &'static str,
+    pub ayuda_solo_mios: &'static str,
+    pub ayuda_quitar_filtros: &'static str,
+    pub ayuda_terminar: &'static str,
+    pub ayuda_matar: &'static str,
 }
 
 pub const ES: Textos = Textos {
@@ -345,6 +406,67 @@ pub const ES: Textos = Textos {
     col_interfaz: "Interfaz",
     col_ahora: "ahora",
     col_total: "total",
+
+    // Pestaña Procesos
+    col_tiempo_cpu: "T. CPU",
+    col_comando: "Comando",
+    solo_mios: "solo míos",
+
+    // Estados de proceso
+    proc_ejecutando: "Activo",
+    proc_durmiendo: "Durmiendo",
+    proc_inactivo: "Inactivo",
+    proc_espera_disco: "E/S disco",
+    proc_detenido: "Detenido",
+    proc_zombi: "Zombi",
+    proc_otro: "Otro",
+
+    // Pie de atajos
+    pie_aceptar: "aceptar",
+    pie_borrar: "borrar",
+    pie_mover: "mover",
+    pie_buscar: "buscar",
+    pie_ordenar: "ordenar",
+    pie_terminar: "terminar",
+    pie_matar: "matar",
+    pie_pestana: "pestaña",
+    pie_ir_a: "ir a",
+    pie_otra_foto: "otra foto",
+    pie_pausa: "pausa",
+    pie_ayuda: "ayuda",
+    pie_salir: "salir",
+    tecla_espacio: "espacio",
+
+    // Ventana de confirmación
+    confirmar_titulo: "Terminar proceso",
+    confirmar_enviar: "¿Enviar",
+    confirmar_a: "a",
+    confirmar_forzar: "(forzar)",
+    confirmar_opciones: "s / Enter: sí      cualquier otra tecla: no",
+
+    // Avisos al enviar señales
+    aviso_enviado_a: "enviado a",
+    aviso_no_se_pudo_terminar: "No se pudo terminar",
+    senal_no_existe: "el proceso ya no existe",
+    senal_sin_permiso: "sin permiso (¿es de otro usuario?)",
+    senal_no_soportada: "señal no soportada",
+
+    // Ventana de ayuda
+    ayuda_titulo: "Ayuda — cualquier tecla para cerrar",
+    ayuda_general: "General",
+    ayuda_cambiar_pestana: "Cambiar de pestaña",
+    ayuda_ir_pestana: "Ir a una pestaña",
+    ayuda_foto: "Foto siguiente / anterior (o nuevo Pokémon)",
+    ayuda_pausa: "Pausar / reanudar la actualización",
+    ayuda_salir: "Salir",
+    ayuda_mover: "Moverse (PgUp/PgDn, g/G)",
+    ayuda_buscar: "Buscar por nombre, comando, PID o usuario",
+    ayuda_ordenar: "Ordenar por CPU, memoria, PID, nombre, usuario",
+    ayuda_invertir: "(repetir la tecla invierte el orden)",
+    ayuda_solo_mios: "Solo mis procesos",
+    ayuda_quitar_filtros: "Quitar filtros",
+    ayuda_terminar: "Terminar (SIGTERM), pide confirmación",
+    ayuda_matar: "Matar (SIGKILL), pide confirmación",
 };
 
 pub const EN: Textos = Textos {
@@ -465,6 +587,67 @@ pub const EN: Textos = Textos {
     col_interfaz: "Interface",
     col_ahora: "now",
     col_total: "total",
+
+    // Pestaña Procesos
+    col_tiempo_cpu: "CPU time",
+    col_comando: "Command",
+    solo_mios: "mine only",
+
+    // Estados de proceso
+    proc_ejecutando: "Running",
+    proc_durmiendo: "Sleeping",
+    proc_inactivo: "Idle",
+    proc_espera_disco: "Disk I/O",
+    proc_detenido: "Stopped",
+    proc_zombi: "Zombie",
+    proc_otro: "Other",
+
+    // Pie de atajos
+    pie_aceptar: "accept",
+    pie_borrar: "clear",
+    pie_mover: "move",
+    pie_buscar: "search",
+    pie_ordenar: "sort",
+    pie_terminar: "end",
+    pie_matar: "kill",
+    pie_pestana: "tab",
+    pie_ir_a: "go to",
+    pie_otra_foto: "next image",
+    pie_pausa: "pause",
+    pie_ayuda: "help",
+    pie_salir: "quit",
+    tecla_espacio: "space",
+
+    // Ventana de confirmación
+    confirmar_titulo: "End process",
+    confirmar_enviar: "Send",
+    confirmar_a: "to",
+    confirmar_forzar: "(force)",
+    confirmar_opciones: "y / Enter: yes      any other key: no",
+
+    // Avisos al enviar señales
+    aviso_enviado_a: "sent to",
+    aviso_no_se_pudo_terminar: "Could not end",
+    senal_no_existe: "the process no longer exists",
+    senal_sin_permiso: "permission denied (owned by another user?)",
+    senal_no_soportada: "signal not supported",
+
+    // Ventana de ayuda
+    ayuda_titulo: "Help — press any key to close",
+    ayuda_general: "General",
+    ayuda_cambiar_pestana: "Switch tab",
+    ayuda_ir_pestana: "Go to a tab",
+    ayuda_foto: "Next / previous image (or a new Pokémon)",
+    ayuda_pausa: "Pause / resume updates",
+    ayuda_salir: "Quit",
+    ayuda_mover: "Move (PgUp/PgDn, g/G)",
+    ayuda_buscar: "Search by name, command, PID or user",
+    ayuda_ordenar: "Sort by CPU, memory, PID, name, user",
+    ayuda_invertir: "(press again to reverse the order)",
+    ayuda_solo_mios: "Only my processes",
+    ayuda_quitar_filtros: "Clear filters",
+    ayuda_terminar: "End (SIGTERM), asks for confirmation",
+    ayuda_matar: "Kill (SIGKILL), asks for confirmation",
 };
 
 #[cfg(test)]

@@ -24,7 +24,10 @@ use crate::{
     config::Tema,
     foto::Contenido,
     i18n,
-    sistema::{EstadoBateria, HISTORIAL, Proceso, Temperatura, fmt_bytes, fmt_duracion, fmt_tasa},
+    sistema::{
+        EstadoBateria, EstadoProceso, HISTORIAL, Proceso, Temperatura, fmt_bytes, fmt_duracion,
+        fmt_tasa,
+    },
 };
 
 static TEMA: OnceLock<Tema> = OnceLock::new();
@@ -340,6 +343,19 @@ fn dibujar_sprite(f: &mut Frame, sp: &crate::foto::Sprite, area: Rect) {
 /// `"Memoria"` → `" Memoria "`: los títulos de los bloques llevan un espacio a cada lado.
 fn marco(texto: &str) -> String {
     format!(" {texto} ")
+}
+
+fn estado_proceso(e: EstadoProceso) -> &'static str {
+    let t = i18n::t();
+    match e {
+        EstadoProceso::Ejecutando => t.proc_ejecutando,
+        EstadoProceso::Durmiendo => t.proc_durmiendo,
+        EstadoProceso::Inactivo => t.proc_inactivo,
+        EstadoProceso::EsperaDisco => t.proc_espera_disco,
+        EstadoProceso::Detenido => t.proc_detenido,
+        EstadoProceso::Zombi => t.proc_zombi,
+        EstadoProceso::Otro => t.proc_otro,
+    }
 }
 
 fn estado_bateria(e: EstadoBateria) -> &'static str {
@@ -1109,6 +1125,7 @@ fn partes_comando(p: &Proceso) -> (String, String, String) {
 }
 
 fn tab_procesos(f: &mut Frame, app: &mut App, area: Rect) {
+    let t = i18n::t();
     let total_ram = app.monitor.memoria.total;
     let flecha = |o: OrdenProc| {
         if app.orden_proc == o {
@@ -1118,14 +1135,14 @@ fn tab_procesos(f: &mut Frame, app: &mut App, area: Rect) {
         }
     };
     let cab = cabecera([
-        format!("PID{}", flecha(OrdenProc::Pid)),
-        format!("Usuario{}", flecha(OrdenProc::Usuario)),
-        format!("CPU%{}", flecha(OrdenProc::Cpu)),
-        format!("MEM%{}", flecha(OrdenProc::Memoria)),
-        "RES".into(),
-        "Estado".into(),
-        "T. CPU".into(),
-        format!("Comando{}", flecha(OrdenProc::Nombre)),
+        format!("{}{}", t.col_pid, flecha(OrdenProc::Pid)),
+        format!("{}{}", t.col_usuario, flecha(OrdenProc::Usuario)),
+        format!("{}{}", t.col_cpu, flecha(OrdenProc::Cpu)),
+        format!("{}{}", t.col_mem, flecha(OrdenProc::Memoria)),
+        t.col_res.into(),
+        t.estado.into(),
+        t.col_tiempo_cpu.into(),
+        format!("{}{}", t.col_comando, flecha(OrdenProc::Nombre)),
     ]);
 
     let lista = app.procesos();
@@ -1143,7 +1160,7 @@ fn tab_procesos(f: &mut Frame, app: &mut App, area: Rect) {
                 Cell::from(format!("{mem_pct:5.1}"))
                     .style(Style::new().fg(color_pct(mem_pct * 3.0))),
                 Cell::from(fmt_bytes(p.memoria)),
-                Cell::from(p.estado.clone()).style(Style::new().fg(Color::Gray)),
+                Cell::from(estado_proceso(p.estado)).style(Style::new().fg(Color::Gray)),
                 Cell::from(fmt_tiempo(p.tiempo)).style(Style::new().fg(Color::Gray)),
                 Cell::from(Line::from(vec![
                     Span::styled(dir, Style::new().fg(tema().tenue)),
@@ -1154,9 +1171,9 @@ fn tab_procesos(f: &mut Frame, app: &mut App, area: Rect) {
         })
         .collect();
 
-    let mut titulo = format!(" Procesos ({n}) ");
+    let mut titulo = format!(" {} ({n}) ", t.pestana_procesos);
     if app.solo_mios {
-        titulo.push_str("· solo míos ");
+        titulo.push_str(&format!("· {} ", t.solo_mios));
     }
     let mut block = bloque(titulo);
     if app.modo == Modo::Buscando || !app.busqueda.is_empty() {
@@ -1233,26 +1250,31 @@ fn dibujar_pie(f: &mut Frame, app: &App, area: Rect) {
         );
         return;
     }
+    let t = i18n::t();
     let pares: &[(&str, &str)] = match (&app.modo, app.pestana) {
-        (Modo::Buscando, _) => &[("Enter", "aceptar"), ("Esc", "borrar"), ("↑↓", "mover")],
+        (Modo::Buscando, _) => &[
+            ("Enter", t.pie_aceptar),
+            ("Esc", t.pie_borrar),
+            ("↑↓", t.pie_mover),
+        ],
         (_, Pestana::Procesos) => &[
-            ("↑↓", "mover"),
-            ("/", "buscar"),
-            ("c m p n u", "ordenar"),
-            ("o", "solo míos"),
-            ("t", "terminar"),
-            ("K", "matar"),
-            ("←→", "pestaña"),
-            ("?", "ayuda"),
-            ("q", "salir"),
+            ("↑↓", t.pie_mover),
+            ("/", t.pie_buscar),
+            ("c m p n u", t.pie_ordenar),
+            ("o", t.solo_mios),
+            ("t", t.pie_terminar),
+            ("K", t.pie_matar),
+            ("←→", t.pie_pestana),
+            ("?", t.pie_ayuda),
+            ("q", t.pie_salir),
         ],
         _ => &[
-            ("←→/Tab", "pestaña"),
-            ("1-7", "ir a"),
-            ("f", "otra foto"),
-            ("espacio", "pausa"),
-            ("?", "ayuda"),
-            ("q", "salir"),
+            ("←→/Tab", t.pie_pestana),
+            ("1-7", t.pie_ir_a),
+            ("f", t.pie_otra_foto),
+            (t.tecla_espacio, t.pie_pausa),
+            ("?", t.pie_ayuda),
+            ("q", t.pie_salir),
         ],
     };
     let mut spans = vec![Span::raw(" ")];
@@ -1280,19 +1302,20 @@ fn centrar(area: Rect, w: u16, h: u16) -> Rect {
 }
 
 fn dibujar_confirmar(f: &mut Frame, pid: u32, nombre: &str, forzar: bool) {
+    let t = i18n::t();
     let r = centrar(f.area(), 58, 7);
     f.render_widget(Clear, r);
     let senal = if forzar {
-        "SIGKILL (forzar)"
+        format!("SIGKILL {}", t.confirmar_forzar)
     } else {
-        "SIGTERM"
+        "SIGTERM".to_string()
     };
     let l = vec![
         Line::raw(""),
         Line::from(vec![
-            Span::raw(" ¿Enviar "),
+            Span::raw(format!(" {} ", t.confirmar_enviar)),
             Span::styled(senal, negrita(Color::Red)),
-            Span::raw(" a "),
+            Span::raw(format!(" {} ", t.confirmar_a)),
             Span::styled(
                 format!("{nombre} ({pid})"),
                 Style::new().add_modifier(Modifier::BOLD),
@@ -1301,40 +1324,38 @@ fn dibujar_confirmar(f: &mut Frame, pid: u32, nombre: &str, forzar: bool) {
         ]),
         Line::raw(""),
         Line::styled(
-            " s / Enter: sí      cualquier otra tecla: no",
+            format!(" {}", t.confirmar_opciones),
             Style::new().fg(tema().tenue),
         ),
     ];
-    let block = bloque(" Terminar proceso ").border_style(Style::new().fg(Color::Red));
+    let block = bloque(marco(t.confirmar_titulo)).border_style(Style::new().fg(Color::Red));
     f.render_widget(Paragraph::new(l).wrap(Wrap { trim: false }).block(block), r);
 }
 
 fn dibujar_ayuda(f: &mut Frame) {
+    let t = i18n::t();
     let secciones: [(&str, &[(&str, &str)]); 2] = [
         (
-            "General",
+            t.ayuda_general,
             &[
-                ("← → / Tab / h l", "Cambiar de pestaña"),
-                ("1 … 7", "Ir a una pestaña"),
-                ("f / F", "Foto siguiente / anterior (o nuevo Pokémon)"),
-                ("espacio", "Pausar / reanudar la actualización"),
-                ("q / Esc", "Salir"),
+                ("← → / Tab / h l", t.ayuda_cambiar_pestana),
+                ("1 … 7", t.ayuda_ir_pestana),
+                ("f / F", t.ayuda_foto),
+                (t.tecla_espacio, t.ayuda_pausa),
+                ("q / Esc", t.ayuda_salir),
             ],
         ),
         (
-            "Procesos",
+            t.pestana_procesos,
             &[
-                ("↑ ↓ / j k", "Moverse (PgUp/PgDn, g/G)"),
-                ("/", "Buscar por nombre, comando, PID o usuario"),
-                (
-                    "c m p n u",
-                    "Ordenar por CPU, memoria, PID, nombre, usuario",
-                ),
-                ("", "(repetir la tecla invierte el orden)"),
-                ("o", "Solo mis procesos"),
-                ("x", "Quitar filtros"),
-                ("t / F9", "Terminar (SIGTERM), pide confirmación"),
-                ("K", "Matar (SIGKILL), pide confirmación"),
+                ("↑ ↓ / j k", t.ayuda_mover),
+                ("/", t.ayuda_buscar),
+                ("c m p n u", t.ayuda_ordenar),
+                ("", t.ayuda_invertir),
+                ("o", t.ayuda_solo_mios),
+                ("x", t.ayuda_quitar_filtros),
+                ("t / F9", t.ayuda_terminar),
+                ("K", t.ayuda_matar),
             ],
         ),
     ];
@@ -1351,8 +1372,5 @@ fn dibujar_ayuda(f: &mut Frame) {
     }
     let r = centrar(f.area(), 72, l.len() as u16 + 2);
     f.render_widget(Clear, r);
-    f.render_widget(
-        Paragraph::new(l).block(bloque(" Ayuda — cualquier tecla para cerrar ")),
-        r,
-    );
+    f.render_widget(Paragraph::new(l).block(bloque(marco(t.ayuda_titulo))), r);
 }

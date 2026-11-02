@@ -45,3 +45,30 @@ jobs:
           key: ${{ matrix.target }}
       - run: cargo build --release --locked --target ${{ matrix.target }}
       - run: ./target/${{ matrix.target }}/release/memtop --version
+
+  # Compila el RPM igual que COPR (.copr/Makefile + packaging/memtop.spec) para detectar
+  # un .spec roto antes de publicar.
+  rpm:
+    name: RPM (Fedora ${{ matrix.fedora }})
+    runs-on: ubuntu-latest
+    container: registry.fedoraproject.org/fedora:${{ matrix.fedora }}
+    strategy:
+      fail-fast: false
+      matrix:
+        fedora: ["43", "44"]
+    steps:
+      # git antes del checkout: sin él, actions/checkout baja el código sin el
+      # repositorio y git archive (en .copr/Makefile) no funciona.
+      - run: dnf -y install git-core make
+      - uses: actions/checkout@v4
+      - name: Generar el SRPM
+        run: make -f .copr/Makefile srpm outdir="$PWD/rpm" spec="$PWD/packaging/memtop.spec"
+      - name: Instalar las dependencias de compilación
+        run: dnf -y builddep rpm/*.src.rpm
+      - name: Compilar el RPM
+        run: rpmbuild --rebuild --define "_rpmdir $PWD/rpm" rpm/*.src.rpm
+      - name: Instalar y probar el paquete
+        run: |
+          dnf -y install rpm/*/memtop-[0-9]*.rpm
+          rpm -qil memtop
+          memtop --version

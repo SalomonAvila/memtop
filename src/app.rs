@@ -322,7 +322,6 @@ impl App {
             }
             KeyCode::Char(c @ '1'..='7') => self.ir_a(Pestana::TODAS[c as usize - '1' as usize]),
             KeyCode::Char('f') => self.fotos.siguiente(),
-            KeyCode::Char('F') => self.fotos.anterior(),
             KeyCode::Char(' ') => self.pausado = !self.pausado,
             _ if self.pestana == Pestana::Procesos => self.tecla_procesos(k),
             _ => {}

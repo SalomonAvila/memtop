@@ -119,10 +119,8 @@ pub struct Textos {
     // Barra superior
     pub pausa: &'static str,
 
-    // Panel de imagen
+    // Panel del Pokémon
     pub foto_otra: &'static str,
-    pub foto_tus_fotos: &'static str,
-    pub foto_no_se_pudo_abrir: &'static str,
     pub foto_dibujo_vacio: &'static str,
 
     // Panel de sistema
@@ -300,10 +298,8 @@ pub const ES: Textos = Textos {
     // Barra superior
     pausa: "PAUSA",
 
-    // Panel de imagen
-    foto_otra: "f: otra",
-    foto_tus_fotos: "tus fotos:",
-    foto_no_se_pudo_abrir: "No se pudo abrir",
+    // Panel del Pokémon
+    foto_otra: "f: otro",
     foto_dibujo_vacio: "dibujo vacío",
 
     // Panel de sistema
@@ -431,7 +427,7 @@ pub const ES: Textos = Textos {
     pie_matar: "matar",
     pie_pestana: "pestaña",
     pie_ir_a: "ir a",
-    pie_otra_foto: "otra foto",
+    pie_otra_foto: "otro Pokémon",
     pie_pausa: "pausa",
     pie_ayuda: "ayuda",
     pie_salir: "salir",
@@ -456,7 +452,7 @@ pub const ES: Textos = Textos {
     ayuda_general: "General",
     ayuda_cambiar_pestana: "Cambiar de pestaña",
     ayuda_ir_pestana: "Ir a una pestaña",
-    ayuda_foto: "Foto siguiente / anterior (o nuevo Pokémon)",
+    ayuda_foto: "Otro Pokémon al azar",
     ayuda_pausa: "Pausar / reanudar la actualización",
     ayuda_salir: "Salir",
     ayuda_mover: "Moverse (PgUp/PgDn, g/G)",
@@ -481,10 +477,8 @@ pub const EN: Textos = Textos {
     // Barra superior
     pausa: "PAUSED",
 
-    // Panel de imagen
+    // Panel del Pokémon
     foto_otra: "f: next",
-    foto_tus_fotos: "your photos:",
-    foto_no_se_pudo_abrir: "Could not open",
     foto_dibujo_vacio: "empty drawing",
 
     // Panel de sistema
@@ -612,7 +606,7 @@ pub const EN: Textos = Textos {
     pie_matar: "kill",
     pie_pestana: "tab",
     pie_ir_a: "go to",
-    pie_otra_foto: "next image",
+    pie_otra_foto: "next Pokémon",
     pie_pausa: "pause",
     pie_ayuda: "help",
     pie_salir: "quit",
@@ -637,7 +631,7 @@ pub const EN: Textos = Textos {
     ayuda_general: "General",
     ayuda_cambiar_pestana: "Switch tab",
     ayuda_ir_pestana: "Go to a tab",
-    ayuda_foto: "Next / previous image (or a new Pokémon)",
+    ayuda_foto: "Another random Pokémon",
     ayuda_pausa: "Pause / resume updates",
     ayuda_salir: "Quit",
     ayuda_mover: "Move (PgUp/PgDn, g/G)",

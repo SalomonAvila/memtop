@@ -1,9 +1,9 @@
 //! Dibujo de la interfaz con ratatui.
 //!
-//! La pantalla se divide en: barra de pestañas (arriba), panel de imagen y resumen del
+//! La pantalla se divide en: barra de pestañas (arriba), panel del Pokémon y resumen del
 //! sistema (izquierda), contenido de la pestaña activa (derecha) y atajos de teclado (abajo).
 //! Todas las funciones son de solo lectura sobre [`App`], salvo el estado de selección
-//! de las tablas y el protocolo de imagen, que ratatui necesita mutables.
+//! de las tablas, que ratatui necesita mutable.
 
 use std::{collections::VecDeque, sync::OnceLock};
 
@@ -17,7 +17,6 @@ use ratatui::{
         ScrollbarState, Sparkline, Table, Tabs, Wrap,
     },
 };
-use ratatui_image::{Resize, StatefulImage};
 
 use crate::{
     app::{App, Modo, OrdenProc, Pestana},
@@ -275,31 +274,19 @@ fn texto_centrado(f: &mut Frame, inner: Rect, texto: String, color: Color) {
 
 fn dibujar_foto(f: &mut Frame, app: &mut App, area: Rect) {
     let t = i18n::t();
-    let pie = if app.fotos.cantidad() > 0 {
-        marco(t.foto_otra)
-    } else {
-        format!(" {} {} ", t.foto_tus_fotos, crate::foto::carpeta_mostrada())
-    };
-    let block = bloque(app.fotos.titulo.clone())
-        .title_bottom(Line::styled(pie, Style::new().fg(tema().tenue)).alignment(Alignment::Right));
+    let mut block = bloque(app.fotos.titulo.clone());
+    if app.fotos.hay_pokemon() {
+        block = block.title_bottom(
+            Line::styled(marco(t.foto_otra), Style::new().fg(tema().tenue))
+                .alignment(Alignment::Right),
+        );
+    }
     let inner = block.inner(area);
     f.render_widget(block, area);
 
-    match &mut app.fotos.actual {
+    match &app.fotos.actual {
         Contenido::Error(e) => texto_centrado(f, inner, e.clone(), Color::Red),
         Contenido::Pixeles(sp) => dibujar_sprite(f, sp, inner),
-        Contenido::Imagen(proto) => {
-            let resize = Resize::Scale(None);
-            let tam = proto.size_for(resize.clone(), inner.as_size());
-            let r = Rect {
-                x: inner.x + inner.width.saturating_sub(tam.width) / 2,
-                y: inner.y + inner.height.saturating_sub(tam.height) / 2,
-                width: tam.width.min(inner.width),
-                height: tam.height.min(inner.height),
-            };
-            f.render_stateful_widget(StatefulImage::default().resize(resize), r, proto.as_mut());
-            let _ = proto.last_encoding_result();
-        }
     }
 }
 
@@ -1340,7 +1327,7 @@ fn dibujar_ayuda(f: &mut Frame) {
             &[
                 ("← → / Tab / h l", t.ayuda_cambiar_pestana),
                 ("1 … 7", t.ayuda_ir_pestana),
-                ("f / F", t.ayuda_foto),
+                ("f", t.ayuda_foto),
                 (t.tecla_espacio, t.ayuda_pausa),
                 ("q / Esc", t.ayuda_salir),
             ],

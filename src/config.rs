@@ -35,18 +35,10 @@ pub struct Config {
     /// Segundos entre actualizaciones.
     pub intervalo: f64,
     pub pestana_inicial: Pestana,
-    pub fotos: Fotos,
+    /// Mostrar un Pokémon al azar si `pokemon-colorscripts` está instalado.
+    pub pokemon: bool,
     pub procesos: Procesos,
     pub colores: Tema,
-}
-
-#[derive(Debug, Clone, PartialEq, Deserialize)]
-#[serde(default, deny_unknown_fields)]
-pub struct Fotos {
-    /// Imagen o carpeta. `None` = carpeta por defecto.
-    pub carpeta: Option<PathBuf>,
-    pub pokemon: bool,
-    pub halfblocks: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
@@ -76,19 +68,9 @@ impl Default for Config {
             idioma: Preferencia::Auto,
             intervalo: 1.0,
             pestana_inicial: Pestana::Resumen,
-            fotos: Fotos::default(),
+            pokemon: true,
             procesos: Procesos::default(),
             colores: Tema::default(),
-        }
-    }
-}
-
-impl Default for Fotos {
-    fn default() -> Self {
-        Self {
-            carpeta: None,
-            pokemon: true,
-            halfblocks: false,
         }
     }
 }
@@ -118,11 +100,10 @@ impl Config {
         Duration::from_secs_f64(self.intervalo)
     }
 
-    fn validar(mut self) -> Result<Self> {
+    fn validar(self) -> Result<Self> {
         if !self.intervalo.is_finite() || self.intervalo < INTERVALO_MINIMO {
             bail!("intervalo debe ser un número de segundos mayor o igual que {INTERVALO_MINIMO}");
         }
-        self.fotos.carpeta = self.fotos.carpeta.map(|c| expandir_home(&c));
         Ok(self)
     }
 }
@@ -134,17 +115,6 @@ fn color<'de, D: Deserializer<'de>>(d: D) -> Result<Color, D::Error> {
             "color no válido: {texto:?} (usa un nombre como \"cyan\", \"#rrggbb\" o un número de 0 a 255)"
         ))
     })
-}
-
-/// `~/fotos` → `/home/usuario/fotos`.
-fn expandir_home(ruta: &Path) -> PathBuf {
-    let Ok(resto) = ruta.strip_prefix("~") else {
-        return ruta.to_path_buf();
-    };
-    match env::var_os("HOME") {
-        Some(home) if !home.is_empty() => PathBuf::from(home).join(resto),
-        _ => ruta.to_path_buf(),
-    }
 }
 
 /// Carpeta de configuración de memtop: `$XDG_CONFIG_HOME/memtop` o `~/.config/memtop`.
@@ -204,10 +174,7 @@ mod tests {
             idioma = "en"
             intervalo = 2.5
             pestana_inicial = "procesos"
-            [fotos]
-            carpeta = "/srv/fotos"
             pokemon = false
-            halfblocks = true
             [procesos]
             orden = "memoria"
             solo_mios = true
@@ -222,9 +189,7 @@ mod tests {
         assert_eq!(c.idioma, Preferencia::En);
         assert_eq!(c.intervalo(), Duration::from_millis(2500));
         assert_eq!(c.pestana_inicial, Pestana::Procesos);
-        assert_eq!(c.fotos.carpeta, Some(PathBuf::from("/srv/fotos")));
-        assert!(!c.fotos.pokemon);
-        assert!(c.fotos.halfblocks);
+        assert!(!c.pokemon);
         assert_eq!(c.procesos.orden, OrdenProc::Memoria);
         assert!(c.procesos.solo_mios);
         assert_eq!(c.colores.acento, Color::LightMagenta);
@@ -245,7 +210,8 @@ mod tests {
     fn rechaza_claves_desconocidas() {
         let e = interpretar("intervalos = 2").unwrap_err().to_string();
         assert!(e.contains("intervalos"), "{e}");
-        assert!(interpretar("[fotos]\npokemn = false").is_err());
+        assert!(interpretar("pokemn = false").is_err());
+        assert!(interpretar("[procesos]\nsolo_mio = true").is_err());
     }
 
     #[test]
@@ -263,25 +229,10 @@ mod tests {
 
     #[test]
     fn los_errores_indican_la_linea() {
-        let e = interpretar("intervalo = 1.0\n[fotos]\npokemon = si\n")
+        let e = interpretar("intervalo = 1.0\nidioma = \"es\"\npokemon = si\n")
             .unwrap_err()
             .to_string();
         assert!(e.contains('3'), "{e}");
-    }
-
-    #[test]
-    fn expande_la_carpeta_personal() {
-        let Some(home) = env::var_os("HOME").filter(|h| !h.is_empty()) else {
-            return;
-        };
-        assert_eq!(
-            expandir_home(Path::new("~/fotos")),
-            PathBuf::from(home).join("fotos")
-        );
-        assert_eq!(
-            expandir_home(Path::new("/abs/~x")),
-            PathBuf::from("/abs/~x")
-        );
     }
 
     #[test]

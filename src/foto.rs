@@ -1,73 +1,28 @@
 //! Panel de la izquierda.
 //!
-//! Fuentes, en este orden:
-//! 1. Imágenes de `--foto RUTA` o, si no se indica, de `~/.config/memtop/fotos/`.
-//! 2. Un Pokémon al azar si `pokemon-colorscripts` está instalado (opcional).
-//! 3. Si no hay ninguna de las dos, el logo de memtop incluido en el binario.
-//!
-//! Las imágenes se muestran con el mejor protocolo que admita la terminal (kitty, sixel,
-//! iTerm2 o medios bloques). El pixel art (Pokémon y logo) se convierte en un [`Sprite`]
+//! Muestra un Pokémon al azar si `pokemon-colorscripts` está instalado (opcional) y, si no,
+//! el logo de memtop incluido en el binario. El pixel art se convierte en un [`Sprite`]
 //! que se reescala al tamaño exacto del panel.
 
 use std::{
-    env, fs,
-    path::{Path, PathBuf},
+    env,
     process::{Command, Stdio},
 };
 
 use ansi_to_tui::IntoText;
-use image::ImageReader;
 use ratatui::{style::Color, text::Text};
-use ratatui_image::{picker::Picker, protocol::StatefulProtocol};
-
-/// Extensiones de imagen que se cargan desde la carpeta de fotos.
-pub const EXT_IMAGEN: &[&str] = &["png", "jpg", "jpeg", "webp", "gif", "bmp", "tiff", "tif"];
-
-/// Lado máximo (px) al que se reduce cada imagen al cargarla, para que redimensionar
-/// en cada cambio de tamaño de la ventana sea rápido aunque el original sea enorme.
-const MAX_PX: u32 = 1400;
-
-enum Fuente {
-    Imagen(PathBuf),
-    Pokemon,
-}
 
 pub enum Contenido {
-    Imagen(Box<StatefulProtocol>),
-    /// Pixel art (p. ej. un Pokémon) que se reescala al panel.
+    /// Pixel art (un Pokémon o el logo) que se reescala al panel.
     Pixeles(Sprite),
     Error(String),
 }
 
 pub struct Fotos {
-    fuentes: Vec<Fuente>,
-    idx: usize,
+    /// `true` si se pidió Pokémon y `pokemon-colorscripts` está instalado.
+    pokemon: bool,
     pub actual: Contenido,
     pub titulo: String,
-    pub picker: Picker,
-    /// Se incrementa cada vez que cambia la foto (para limpiar restos de sixel).
-    pub version: u64,
-}
-
-/// Carpeta de fotos por defecto: `$XDG_CONFIG_HOME/memtop/fotos`.
-pub fn carpeta_por_defecto() -> PathBuf {
-    crate::config::carpeta().join("fotos")
-}
-
-/// La carpeta de fotos para mostrarla al usuario, con `~` en lugar de `$HOME`.
-pub fn carpeta_mostrada() -> String {
-    let ruta = carpeta_por_defecto().display().to_string();
-    match env::var("HOME") {
-        Ok(home) if !home.is_empty() && ruta.starts_with(&home) => {
-            format!("~{}", &ruta[home.len()..])
-        }
-        _ => ruta,
-    }
-}
-
-fn es_imagen(p: &Path) -> bool {
-    p.extension()
-        .is_some_and(|e| EXT_IMAGEN.contains(&e.to_string_lossy().to_lowercase().as_str()))
 }
 
 fn hay_pokemon() -> bool {
@@ -77,106 +32,29 @@ fn hay_pokemon() -> bool {
 }
 
 impl Fotos {
-    pub fn new(picker: Picker, ruta: Option<PathBuf>, pokemon: bool) -> Self {
-        let ruta = ruta.unwrap_or_else(carpeta_por_defecto);
-        let mut imagenes: Vec<PathBuf> = if ruta.is_file() {
-            vec![ruta]
-        } else {
-            fs::read_dir(&ruta)
-                .map(|d| {
-                    d.flatten()
-                        .map(|e| e.path())
-                        .filter(|p| p.is_file() && es_imagen(p))
-                        .collect()
-                })
-                .unwrap_or_default()
-        };
-        imagenes.sort();
-
-        let mut fuentes: Vec<Fuente> = imagenes.into_iter().map(Fuente::Imagen).collect();
-        if pokemon && hay_pokemon() {
-            fuentes.push(Fuente::Pokemon);
-        }
+    pub fn new(pokemon: bool) -> Self {
         let mut f = Self {
-            fuentes,
-            idx: 0,
+            pokemon: pokemon && hay_pokemon(),
             actual: Contenido::Pixeles(Sprite::logo()),
             titulo: " memtop ".into(),
-            picker,
-            version: 0,
         };
-        f.cargar();
+        f.siguiente();
         f
     }
 
-    pub fn cantidad(&self) -> usize {
-        self.fuentes.len()
+    /// `true` si `f` cambia el dibujo (hay Pokémon disponibles).
+    pub fn hay_pokemon(&self) -> bool {
+        self.pokemon
     }
 
+    /// Carga otro Pokémon al azar. Sin Pokémon no hace nada: se queda el logo.
     pub fn siguiente(&mut self) {
-        if !self.fuentes.is_empty() {
-            self.idx = (self.idx + 1) % self.fuentes.len();
-            self.cargar();
+        if self.pokemon {
+            let (nombre, contenido) = pokemon();
+            self.titulo = format!(" {nombre} ");
+            self.actual = contenido;
         }
     }
-
-    pub fn anterior(&mut self) {
-        if !self.fuentes.is_empty() {
-            self.idx = (self.idx + self.fuentes.len() - 1) % self.fuentes.len();
-            self.cargar();
-        }
-    }
-
-    fn cargar(&mut self) {
-        self.version += 1;
-        let n = self.fuentes.len();
-        let pos = if n > 1 {
-            format!(" {}/{n}", self.idx + 1)
-        } else {
-            String::new()
-        };
-        let Some(fuente) = self.fuentes.get(self.idx) else {
-            self.actual = Contenido::Pixeles(Sprite::logo());
-            self.titulo = " memtop ".into();
-            return;
-        };
-        match fuente {
-            Fuente::Imagen(p) => {
-                let nombre = p
-                    .file_stem()
-                    .map(|s| s.to_string_lossy().into_owned())
-                    .unwrap_or_default();
-                self.titulo = format!(" {nombre}{pos} ");
-                self.actual = match abrir_imagen(p) {
-                    Ok(img) => Contenido::Imagen(Box::new(self.picker.new_resize_protocol(img))),
-                    Err(e) => Contenido::Error(format!(
-                        "{} {}:\n{e}",
-                        crate::i18n::t().foto_no_se_pudo_abrir,
-                        p.display()
-                    )),
-                };
-            }
-            Fuente::Pokemon => {
-                let (nombre, contenido) = pokemon();
-                self.titulo = format!(" {nombre}{pos} ");
-                self.actual = contenido;
-            }
-        }
-    }
-}
-
-fn abrir_imagen(p: &Path) -> Result<image::DynamicImage, String> {
-    let img = ImageReader::open(p)
-        .map_err(|e| e.to_string())?
-        .with_guessed_format()
-        .map_err(|e| e.to_string())?
-        .decode()
-        .map_err(|e| e.to_string())?;
-    Ok(if img.width() > MAX_PX || img.height() > MAX_PX {
-        img.thumbnail(MAX_PX, MAX_PX)
-    } else {
-        img
-    })
 }
 
 fn pokemon() -> (String, Contenido) {
@@ -413,13 +291,5 @@ mod tests {
         let logo = Sprite::logo();
         assert_eq!((logo.ancho, logo.alto), (28, 23));
         assert_eq!(logo.px.len(), 28 * 23);
-    }
-
-    #[test]
-    fn reconoce_extensiones_de_imagen() {
-        assert!(es_imagen(Path::new("foto.JPG")));
-        assert!(es_imagen(Path::new("a/b.webp")));
-        assert!(!es_imagen(Path::new("notas.txt")));
-        assert!(!es_imagen(Path::new("sin_extension")));
     }
 }

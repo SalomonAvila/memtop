@@ -6,8 +6,8 @@
 #     mkdir -p ~/.config/memtop && memtop --config-ejemplo > ~/.config/memtop/config.toml
 #
 # Todas las claves son opcionales: las que borres o dejes comentadas usan el valor por
-# defecto que aparece aquí. Las opciones de la línea de comandos (--intervalo, --foto,
-# --sin-pokemon, --halfblocks, --idioma) tienen prioridad sobre este archivo.
+# defecto que aparece aquí. Las opciones de la línea de comandos (--intervalo,
+# --sin-pokemon, --idioma) tienen prioridad sobre este archivo.
 
 # Idioma de la interfaz: "auto" (según LANG y similares), "es" o "en".
 idioma = "auto"
@@ -19,16 +19,9 @@ intervalo = 1.0
 # "resumen", "cpu", "ram", "almacenamiento", "gpu", "red" o "procesos".
 pestana_inicial = "resumen"
 
-[fotos]
-# Imagen o carpeta de imágenes del panel izquierdo. Admite "~" para tu carpeta personal.
-# Por defecto: $XDG_CONFIG_HOME/memtop/fotos
-# carpeta = "~/Imágenes/memtop"
-
-# Mostrar un Pokémon al azar si pokemon-colorscripts está instalado.
+# Mostrar un Pokémon al azar en el panel izquierdo si pokemon-colorscripts está
+# instalado. Si no, se muestra el logo de memtop.
 pokemon = true
-
-# Dibujar las imágenes con caracteres ▀ aunque la terminal admita gráficos.
-halfblocks = false
 
 [procesos]
 # Columna de orden inicial: "cpu", "memoria", "pid", "nombre" o "usuario".

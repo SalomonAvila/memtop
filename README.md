@@ -14,7 +14,7 @@ distribuye como un único binario estático, sin dependencias del sistema.
 - [Uso](#uso)
 - [Configuración](#configuración)
 - [Teclas](#teclas)
-- [Panel de imagen](#panel-de-imagen)
+- [Panel del Pokémon](#panel-del-pokémon)
 - [Datos y permisos](#datos-y-permisos)
 - [Desarrollo](#desarrollo)
 - [Licencia](#licencia)
@@ -26,9 +26,9 @@ distribuye como un único binario estático, sin dependencias del sistema.
 │ Pestañas: 1 Resumen · 2 CPU · 3 RAM · 4 Almacenamiento · 5 GPU · …   │
 ├──────────────────────┬───────────────────────────────────────────────┤
 │                      │                                               │
-│   Imagen             │                                               │
-│   (foto, Pokémon     │   Contenido de la pestaña activa              │
-│    o logo)           │   (barras, gráficas de historial, tablas)     │
+│   Pokémon            │                                               │
+│   (o el logo de      │   Contenido de la pestaña activa              │
+│    memtop)           │   (barras, gráficas de historial, tablas)     │
 │                      │                                               │
 ├──────────────────────┤                                               │
 │   Sistema            │                                               │
@@ -112,22 +112,18 @@ memtop funciona sin ninguno de ellos; solo amplían lo que muestra.
 | Programa | Qué añade | De dónde sale |
 |---|---|---|
 | `nvidia-smi` | Uso, VRAM, temperatura, consumo y frecuencia de GPUs NVIDIA | Se instala junto con el driver propietario de NVIDIA |
-| `pokemon-colorscripts` | Un Pokémon al azar en el panel de imagen | [gitlab.com/phoneybadger/pokemon-colorscripts](https://gitlab.com/phoneybadger/pokemon-colorscripts) |
+| `pokemon-colorscripts` | Un Pokémon al azar en el panel izquierdo (sin él se ve el logo de memtop) | [gitlab.com/phoneybadger/pokemon-colorscripts](https://gitlab.com/phoneybadger/pokemon-colorscripts) |
 
 ## Uso
 
 ```sh
-memtop                                  # imágenes de la carpeta por defecto
-memtop --foto ~/Imágenes/equipo.jpg     # una imagen concreta
-memtop --foto ~/Imágenes/fondos/        # todas las imágenes de una carpeta
-memtop --sin-pokemon --intervalo 2      # sin Pokémon, actualizando cada 2 s
+memtop                                  # Pokémon al azar si está pokemon-colorscripts
+memtop --sin-pokemon --intervalo 2      # solo el logo, actualizando cada 2 s
 ```
 
 | Opción | Descripción |
 |---|---|
-| `--foto RUTA` | Imagen o carpeta de imágenes para el panel izquierdo. Por defecto: `$XDG_CONFIG_HOME/memtop/fotos/` (normalmente `~/.config/memtop/fotos/`) |
 | `--sin-pokemon` | No mostrar Pokémon aunque `pokemon-colorscripts` esté instalado |
-| `--halfblocks` | Dibujar las imágenes con caracteres `▀` aunque la terminal admita gráficos |
 | `-i`, `--intervalo SEG` | Segundos entre actualizaciones. Por defecto `1`, mínimo `0.2` |
 | `--idioma IDIOMA` | Idioma de la interfaz: `auto` (según `LANG`), `es` o `en` |
 | `-c`, `--config RUTA` | Usar este archivo de configuración en lugar del de por defecto |
@@ -157,9 +153,7 @@ son opcionales:
 | `idioma` | `"auto"` (según `LANGUAGE`, `LC_ALL`, `LC_MESSAGES` o `LANG`), `"es"`, `"en"` | `"auto"` |
 | `intervalo` | Segundos entre actualizaciones, `0.2` o más | `1.0` |
 | `pestana_inicial` | `"resumen"`, `"cpu"`, `"ram"`, `"almacenamiento"`, `"gpu"`, `"red"`, `"procesos"` | `"resumen"` |
-| `[fotos] carpeta` | Imagen o carpeta; admite `~` | `$XDG_CONFIG_HOME/memtop/fotos` |
-| `[fotos] pokemon` | `true` / `false` | `true` |
-| `[fotos] halfblocks` | `true` / `false` | `false` |
+| `pokemon` | `true` / `false` | `true` |
 | `[procesos] orden` | `"cpu"`, `"memoria"`, `"pid"`, `"nombre"`, `"usuario"` | `"cpu"` |
 | `[procesos] solo_mios` | `true` / `false` | `false` |
 | `[colores] acento` | Color de títulos, pestaña activa y teclas | `"cyan"` |
@@ -194,7 +188,7 @@ memtop: error en ~/.config/memtop/config.toml: TOML parse error at line 3, colum
   |
 3 | pokemn = false
   | ^^^^^^
-unknown field `pokemn`, expected one of `carpeta`, `pokemon`, `halfblocks`
+unknown field `pokemn`, expected one of `idioma`, `intervalo`, `pestana_inicial`, `pokemon`, `procesos`, `colores`
 ```
 
 ## Teclas
@@ -205,7 +199,7 @@ Pulsa `?` dentro de memtop para ver esta lista.
 |---|---|
 | `←` `→`, `Tab`, `Shift+Tab`, `h` `l` | Pestaña anterior / siguiente |
 | `1` … `7` | Ir a una pestaña |
-| `f` / `F` | Imagen siguiente / anterior |
+| `f` | Otro Pokémon al azar |
 | `espacio` | Pausar o reanudar la actualización |
 | `?` | Ayuda |
 | `q`, `Esc`, `Ctrl+C` | Salir |
@@ -227,27 +221,16 @@ En la pestaña **Procesos**:
 Al buscar, filtrar u ordenar, la selección vuelve al primer proceso de la lista para que
 nunca quede seleccionado uno que no se ve.
 
-## Panel de imagen
+## Panel del Pokémon
 
-El panel izquierdo muestra, en este orden:
+El panel izquierdo muestra un Pokémon al azar si `pokemon-colorscripts` está instalado y no
+se usó `--sin-pokemon` (o `pokemon = false`). Con `f` aparece otro. Si no, muestra el logo
+de memtop, incluido en el binario.
 
-1. Las imágenes de `--foto` o de la carpeta por defecto. Formatos: **png, jpg/jpeg, webp,
-   gif, bmp y tiff**.
-2. Un Pokémon al azar, si `pokemon-colorscripts` está instalado y no se usó `--sin-pokemon`.
-   Cada vez que se llega a él con `f` aparece otro.
-3. Si no hay ninguno de los dos, el logo de memtop, incluido en el binario.
-
-Las imágenes se escalan para llenar el panel conservando la proporción. memtop detecta qué
-admite la terminal:
-
-| Terminal | Cómo se ven las imágenes |
-|---|---|
-| Kitty, WezTerm, Ghostty, Konsole, foot, iTerm2 y otras con protocolo kitty, sixel o iTerm2 | Con su resolución real |
-| El resto (GNOME Terminal, Ptyxis, xterm…) | Con caracteres de medio bloque `▀` |
-
-El pixel art (Pokémon y logo) se convierte en una cuadrícula de píxeles, se le recortan los
-bordes vacíos y se redibuja escalado al panel. Si un factor entero (×2, ×3…) llena al menos
-el 85 % del espacio se usa ese, para que se vea nítido; si no, la escala exacta.
+El pixel art se convierte en una cuadrícula de píxeles, se le recortan los bordes vacíos y
+se redibuja escalado al panel con caracteres de medio bloque `▀`, así que se ve igual en
+cualquier terminal con color. Si un factor entero (×2, ×3…) llena al menos el 85 % del
+espacio se usa ese, para que se vea nítido; si no, la escala exacta.
 
 ## Datos y permisos
 
@@ -301,7 +284,7 @@ memtop/
 │   ├── sistema.rs              Lectura de CPU, memoria, discos, red, procesos, sensores y batería
 │   ├── gpu.rs                  Detección de GPUs y consulta a nvidia-smi
 │   ├── pci.rs                  Nombres de GPU a partir de la base PCI incluida
-│   └── foto.rs                 Panel de imagen, sprites y logo
+│   └── foto.rs                 Panel del Pokémon, sprites y logo
 ├── config.ejemplo.toml         Plantilla de configuración (también en memtop --config-ejemplo)
 ├── Cargo.toml
 ├── Cargo.lock

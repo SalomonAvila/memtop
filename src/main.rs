@@ -3,7 +3,7 @@
 //! Estructura:
 //! - [`sistema`]: lectura de CPU, memoria, discos, red, procesos, sensores y batería.
 //! - [`gpu`] y [`pci`]: detección de GPUs y sus nombres comerciales.
-//! - [`foto`]: panel de imágenes y pixel art.
+//! - [`foto`]: panel del Pokémon (o el logo) en pixel art.
 //! - [`config`]: archivo de configuración.
 //! - [`i18n`]: idioma de la interfaz y textos traducidos.
 //! - [`app`]: estado de la interfaz y manejo de teclas.
@@ -29,7 +29,6 @@ use std::{
 use anyhow::Result;
 use crossterm::event::{self, Event, KeyEventKind};
 use ratatui::DefaultTerminal;
-use ratatui_image::picker::{Picker, ProtocolType};
 
 use app::App;
 use config::Config;
@@ -43,9 +42,7 @@ USO:
     memtop [OPCIONES]
 
 OPCIONES:
-    --foto RUTA             Imagen o carpeta de imágenes para el panel izquierdo
     --sin-pokemon           No mostrar Pokémon aunque pokemon-colorscripts esté instalado
-    --halfblocks            Dibujar las imágenes con caracteres ▀ aunque la terminal admita gráficos
     -i, --intervalo SEG     Segundos entre actualizaciones (mínimo 0.2)
     --idioma IDIOMA         Idioma de la interfaz: auto (según LANG), es o en
     -c, --config RUTA       Usar este archivo de configuración
@@ -66,9 +63,7 @@ Dentro de memtop pulsa ? para ver todas las teclas.
 #[derive(Debug, Default, PartialEq)]
 struct Opciones {
     config: Option<PathBuf>,
-    foto: Option<PathBuf>,
     pokemon: Option<bool>,
-    halfblocks: Option<bool>,
     intervalo: Option<f64>,
     idioma: Option<i18n::Preferencia>,
 }
@@ -79,14 +74,8 @@ impl Opciones {
         if let Some(i) = self.intervalo {
             c.intervalo = i;
         }
-        if let Some(f) = self.foto {
-            c.fotos.carpeta = Some(f);
-        }
         if let Some(p) = self.pokemon {
-            c.fotos.pokemon = p;
-        }
-        if let Some(h) = self.halfblocks {
-            c.fotos.halfblocks = h;
+            c.pokemon = p;
         }
         if let Some(i) = self.idioma {
             c.idioma = i;
@@ -116,11 +105,6 @@ fn leer_opciones(args: impl IntoIterator<Item = String>) -> Result<Accion, Strin
                     args.next().ok_or("--config necesita una ruta")?,
                 ))
             }
-            "--foto" => {
-                o.foto = Some(PathBuf::from(
-                    args.next().ok_or("--foto necesita una ruta")?,
-                ))
-            }
             "--idioma" => {
                 let v = args
                     .next()
@@ -131,7 +115,6 @@ fn leer_opciones(args: impl IntoIterator<Item = String>) -> Result<Accion, Strin
                 o.idioma = Some(i);
             }
             "--sin-pokemon" => o.pokemon = Some(false),
-            "--halfblocks" => o.halfblocks = Some(true),
             "-i" | "--intervalo" => {
                 let s: f64 = args
                     .next()
@@ -198,13 +181,7 @@ fn iniciar(config: Config) -> Result<()> {
     // `ratatui::init` activa el modo raw y la pantalla alternativa, e instala un hook
     // que restaura la terminal si el programa entra en pánico.
     let mut terminal = ratatui::init();
-    // La consulta del protocolo de imágenes necesita el modo raw ya activo.
-    let picker = if config.fotos.halfblocks {
-        Picker::halfblocks()
-    } else {
-        Picker::from_query_stdio().unwrap_or_else(|_| Picker::halfblocks())
-    };
-    let fotos = foto::Fotos::new(picker, config.fotos.carpeta.clone(), config.fotos.pokemon);
+    let fotos = foto::Fotos::new(config.pokemon);
     let app = App::new(monitor, fotos, &config);
     let resultado = ejecutar(&mut terminal, app, config.intervalo());
     ratatui::restore();
@@ -213,27 +190,15 @@ fn iniciar(config: Config) -> Result<()> {
 
 /// Bucle principal: dibuja, espera teclas hasta el siguiente tick y actualiza los datos.
 fn ejecutar(terminal: &mut DefaultTerminal, mut app: App, intervalo: Duration) -> Result<()> {
-    // Sixel e iTerm2 pintan píxeles encima de las celdas: al cambiar de imagen o de
-    // tamaño hay que limpiar la pantalla o quedan restos de la anterior.
-    let limpiar = matches!(
-        app.fotos.picker.protocol_type(),
-        ProtocolType::Sixel | ProtocolType::Iterm2
-    );
-    let mut version_foto = app.fotos.version;
     let mut siguiente_tick = Instant::now() + intervalo;
 
     while !app.salir {
-        if limpiar && app.fotos.version != version_foto {
-            terminal.clear()?;
-            version_foto = app.fotos.version;
-        }
         terminal.draw(|f| ui::dibujar(f, &mut app))?;
 
         let espera = siguiente_tick.saturating_duration_since(Instant::now());
         if event::poll(espera)? {
             match event::read()? {
                 Event::Key(k) if k.kind == KeyEventKind::Press => app.tecla(k),
-                Event::Resize(..) if limpiar => terminal.clear()?,
                 _ => {}
             }
         }
@@ -271,10 +236,7 @@ mod tests {
         let o = opciones(&[
             "--idioma",
             "en",
-            "--foto",
-            "/tmp/a.png",
             "--sin-pokemon",
-            "--halfblocks",
             "-i",
             "2,5",
             "-c",
@@ -282,9 +244,7 @@ mod tests {
         ]);
         assert_eq!(o.config, Some(PathBuf::from("/tmp/c.toml")));
         let c = o.aplicar(Config::default());
-        assert_eq!(c.fotos.carpeta, Some(PathBuf::from("/tmp/a.png")));
-        assert!(!c.fotos.pokemon);
-        assert!(c.fotos.halfblocks);
+        assert!(!c.pokemon);
         assert_eq!(c.idioma, i18n::Preferencia::En);
         assert_eq!(c.intervalo(), Duration::from_millis(2500));
     }
@@ -292,15 +252,15 @@ mod tests {
     #[test]
     fn las_opciones_tienen_prioridad_sobre_el_archivo() {
         let archivo = config::interpretar(
-            "idioma = \"es\"\nintervalo = 5.0\n[fotos]\npokemon = true\nhalfblocks = true",
+            "idioma = \"es\"\nintervalo = 5.0\npokemon = true\npestana_inicial = \"red\"",
         )
         .unwrap();
         let c = opciones(&["-i", "2", "--sin-pokemon", "--idioma", "en"]).aplicar(archivo);
         assert_eq!(c.intervalo, 2.0);
-        assert!(!c.fotos.pokemon);
+        assert!(!c.pokemon);
         assert_eq!(c.idioma, i18n::Preferencia::En);
         // Lo que no se indicó en la línea de comandos sale del archivo.
-        assert!(c.fotos.halfblocks);
+        assert_eq!(c.pestana_inicial, app::Pestana::Red);
     }
 
     #[test]
@@ -312,7 +272,6 @@ mod tests {
 
     #[test]
     fn rechaza_valores_invalidos() {
-        assert!(leer(&["--foto"]).is_err());
         assert!(leer(&["--config"]).is_err());
         assert!(leer(&["--idioma"]).is_err());
         assert!(leer(&["--idioma", "fr"]).is_err());

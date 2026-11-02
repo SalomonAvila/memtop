@@ -1,6 +1,9 @@
 # Compilación de Cargo
 /target/
 
+# SRPM y fuentes generadas por .copr/Makefile
+/rpm/
+
 # Editores y sistema
 .vscode/
 .idea/

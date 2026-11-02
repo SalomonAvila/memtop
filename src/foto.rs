@@ -9,8 +9,7 @@ use std::{
     process::{Command, Stdio},
 };
 
-use ansi_to_tui::IntoText;
-use ratatui::{style::Color, text::Text};
+use ratatui::style::Color;
 
 pub enum Contenido {
     /// Pixel art (un Pokémon o el logo) que se reescala al panel.
@@ -82,12 +81,9 @@ fn pokemon() -> (String, Contenido) {
         nombre
     };
     let dibujo = dibujo.trim_end_matches('\n');
-    let contenido = match dibujo.as_bytes().into_text() {
-        Ok(t) => match Sprite::desde_texto(&t) {
-            Some(sp) => Contenido::Pixeles(sp),
-            None => Contenido::Error(crate::i18n::t().foto_dibujo_vacio.into()),
-        },
-        Err(e) => Contenido::Error(e.to_string()),
+    let contenido = match Sprite::desde_ansi(dibujo) {
+        Some(sp) => Contenido::Pixeles(sp),
+        None => Contenido::Error(crate::i18n::t().foto_dibujo_vacio.into()),
     };
     (capitalizar(nombre), contenido)
 }
@@ -97,6 +93,39 @@ fn capitalizar(s: &str) -> String {
     c.next()
         .map(|f| f.to_uppercase().chain(c).collect())
         .unwrap_or_default()
+}
+
+/// Una celda de la terminal: carácter, color de texto y color de fondo.
+type Celda = (char, Option<Color>, Option<Color>);
+
+/// Aplica los parámetros de una secuencia SGR (`ESC [ … m`) a los colores actuales.
+/// Admite colores de 24 bits (`38;2;r;g;b`), de 256 (`38;5;n`) y los 16 básicos; el resto
+/// de atributos (negrita, subrayado…) no afecta al dibujo y se ignora.
+fn aplicar_sgr(params: &str, fg: &mut Option<Color>, bg: &mut Option<Color>) {
+    let mut n = params.split(';').map(|p| p.parse::<u8>().unwrap_or(0));
+    while let Some(p) = n.next() {
+        match p {
+            0 => (*fg, *bg) = (None, None),
+            39 => *fg = None,
+            49 => *bg = None,
+            30..=37 => *fg = Some(Color::Indexed(p - 30)),
+            40..=47 => *bg = Some(Color::Indexed(p - 40)),
+            90..=97 => *fg = Some(Color::Indexed(p - 90 + 8)),
+            100..=107 => *bg = Some(Color::Indexed(p - 100 + 8)),
+            38 | 48 => {
+                let color = match n.next() {
+                    Some(2) => match (n.next(), n.next(), n.next()) {
+                        (Some(r), Some(g), Some(b)) => Some(Color::Rgb(r, g, b)),
+                        _ => None,
+                    },
+                    Some(5) => n.next().map(Color::Indexed),
+                    _ => None,
+                };
+                if p == 38 { *fg = color } else { *bg = color }
+            }
+            _ => {}
+        }
+    }
 }
 
 /// Imagen de píxeles sacada de arte ANSI con medios bloques (`▀`/`▄`):
@@ -109,31 +138,49 @@ pub struct Sprite {
 }
 
 impl Sprite {
-    fn desde_texto(t: &Text) -> Option<Self> {
-        let alto = t.lines.len() * 2;
-        let ancho = t.lines.iter().map(|l| l.width()).max()?;
-        let mut px = vec![None; ancho * alto];
-        for (fila, linea) in t.lines.iter().enumerate() {
-            let mut x = 0;
-            for span in &linea.spans {
-                let st = linea.style.patch(span.style);
-                let (fg, bg) = (
-                    st.fg.filter(|c| *c != Color::Reset),
-                    st.bg.filter(|c| *c != Color::Reset),
-                );
-                for ch in span.content.chars() {
-                    let (arriba, abajo) = match ch {
-                        '▀' => (fg, bg),
-                        '▄' => (bg, fg),
-                        '█' => (fg, fg),
-                        _ => (bg, bg),
-                    };
-                    if x < ancho {
-                        px[fila * 2 * ancho + x] = arriba;
-                        px[(fila * 2 + 1) * ancho + x] = abajo;
+    /// Convierte el texto con colores ANSI de `pokemon-colorscripts` en píxeles.
+    fn desde_ansi(ansi: &str) -> Option<Self> {
+        // Primero, cada fila como lista de celdas (carácter, color de texto, color de fondo).
+        let mut filas: Vec<Vec<Celda>> = vec![Vec::new()];
+        let (mut fg, mut bg) = (None, None);
+        let mut chars = ansi.chars().peekable();
+        while let Some(ch) = chars.next() {
+            match ch {
+                '\x1b' => {
+                    // Secuencia CSI: ESC [ parámetros letra-final. Solo interesa la `m` (SGR).
+                    if chars.next_if_eq(&'[').is_none() {
+                        continue;
                     }
-                    x += 1;
+                    let mut params = String::new();
+                    for c in chars.by_ref() {
+                        if ('\x40'..='\x7e').contains(&c) {
+                            if c == 'm' {
+                                aplicar_sgr(&params, &mut fg, &mut bg);
+                            }
+                            break;
+                        }
+                        params.push(c);
+                    }
                 }
+                '\n' => filas.push(Vec::new()),
+                '\r' => {}
+                c => filas.last_mut()?.push((c, fg, bg)),
+            }
+        }
+
+        let alto = filas.len() * 2;
+        let ancho = filas.iter().map(Vec::len).max()?;
+        let mut px = vec![None; ancho * alto];
+        for (fila, celdas) in filas.iter().enumerate() {
+            for (x, &(ch, fg, bg)) in celdas.iter().enumerate() {
+                let (arriba, abajo) = match ch {
+                    '▀' => (fg, bg),
+                    '▄' => (bg, fg),
+                    '█' => (fg, fg),
+                    _ => (bg, bg),
+                };
+                px[fila * 2 * ancho + x] = arriba;
+                px[(fila * 2 + 1) * ancho + x] = abajo;
             }
         }
         Self { ancho, alto, px }.recortado()
@@ -241,8 +288,6 @@ impl Sprite {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ratatui::style::Style;
-    use ratatui::text::{Line, Span};
 
     fn rojo() -> Color {
         Color::Rgb(255, 0, 0)
@@ -251,22 +296,36 @@ mod tests {
     #[test]
     fn convierte_medios_bloques_en_pixeles_y_recorta_bordes() {
         // "  ▀ " con fg rojo: un píxel arriba, el resto transparente.
-        let t = Text::from(vec![
-            Line::from("    "),
-            Line::from(vec![
-                Span::raw("  "),
-                Span::styled("▀", Style::new().fg(rojo())),
-                Span::raw(" "),
-            ]),
-        ]);
-        let sp = Sprite::desde_texto(&t).unwrap();
+        let sp = Sprite::desde_ansi("    \n  \x1b[38;2;255;0;0m▀\x1b[0m ").unwrap();
         assert_eq!((sp.ancho, sp.alto), (1, 1));
         assert_eq!(sp.pixel(0, 0), Some(rojo()));
     }
 
     #[test]
+    fn lee_fondo_y_colores_de_256_y_basicos() {
+        // ▀ con fg 256 (índice 196) y fondo básico azul (44): dos píxeles distintos.
+        let sp = Sprite::desde_ansi("\x1b[38;5;196;44m▀\x1b[0m").unwrap();
+        assert_eq!((sp.ancho, sp.alto), (1, 2));
+        assert_eq!(sp.pixel(0, 0), Some(Color::Indexed(196)));
+        assert_eq!(sp.pixel(0, 1), Some(Color::Indexed(4)));
+        // ▄ invierte: el color de texto va abajo.
+        let sp = Sprite::desde_ansi("\x1b[91;48;2;255;0;0m▄").unwrap();
+        assert_eq!(sp.pixel(0, 0), Some(rojo()));
+        assert_eq!(sp.pixel(0, 1), Some(Color::Indexed(9)));
+    }
+
+    #[test]
+    fn el_reset_y_las_secuencias_desconocidas_no_pintan() {
+        // Tras ESC[0m el bloque no tiene color; ESC[2K no es SGR y se ignora.
+        let sp = Sprite::desde_ansi("\x1b[2K\x1b[38;2;255;0;0m█\x1b[0m█").unwrap();
+        assert_eq!((sp.ancho, sp.alto), (1, 2));
+        assert_eq!(sp.pixel(0, 1), Some(rojo()));
+    }
+
+    #[test]
     fn un_dibujo_vacio_no_produce_sprite() {
-        assert!(Sprite::desde_texto(&Text::from("   ")).is_none());
+        assert!(Sprite::desde_ansi("   ").is_none());
+        assert!(Sprite::desde_ansi("").is_none());
     }
 
     #[test]

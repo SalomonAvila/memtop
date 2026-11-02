@@ -11,7 +11,6 @@ keywords = ["tui", "monitor", "fastfetch", "htop", "ratatui"]
 categories = ["command-line-utilities"]
 
 [dependencies]
-ansi-to-tui = "8.0.1"
 anyhow = "1"
 crossterm = "0.29"
 ratatui = "0.30"

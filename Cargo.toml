@@ -14,9 +14,9 @@ categories = ["command-line-utilities"]
 anyhow = "1"
 crossterm = "0.29"
 ratatui = "0.30"
-serde = { version = "1.0.229", features = ["derive"] }
+serde = { version = "1", features = ["derive"] }
 sysinfo = { version = "0.40", default-features = false, features = ["component", "disk", "network", "system", "user"] }
-toml = { version = "0.9", default-features = false, features = ["parse", "serde"] }
+toml = { version = "1", default-features = false, features = ["parse", "serde"] }
 
 [profile.release]
 lto = true

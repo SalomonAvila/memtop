@@ -5,15 +5,19 @@ use std::time::Instant;
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::widgets::TableState;
+use serde::Deserialize;
 
 use crate::{
+    config::Config,
     foto::Fotos,
     gpu,
     sistema::{Monitor, Proceso},
 };
 
 /// Pestañas del panel derecho, en el orden en que se muestran (teclas `1`–`7`).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// En la configuración se escriben en minúsculas (`"cpu"`, `"procesos"`…).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum Pestana {
     Resumen,
     Cpu,
@@ -51,13 +55,22 @@ impl Pestana {
 }
 
 /// Columna por la que se ordena la pestaña Procesos.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// En la configuración se escriben en minúsculas (`"cpu"`, `"memoria"`…).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum OrdenProc {
     Cpu,
     Memoria,
     Pid,
     Nombre,
     Usuario,
+}
+
+impl OrdenProc {
+    /// Números de mayor a menor (lo que más consume, arriba); texto de la A a la Z.
+    fn descendente_por_defecto(self) -> bool {
+        matches!(self, OrdenProc::Cpu | OrdenProc::Memoria)
+    }
 }
 
 /// Qué recibe las teclas: la vista normal, la búsqueda o una ventana modal.
@@ -93,7 +106,9 @@ pub struct App {
 }
 
 impl App {
-    pub fn new(monitor: Monitor, fotos: Fotos) -> Self {
+    /// Crea el estado inicial con la pestaña, el orden y el filtro de la configuración.
+    pub fn new(monitor: Monitor, fotos: Fotos, config: &Config) -> Self {
+        let orden = config.procesos.orden;
         let mut app = Self {
             monitor,
             fotos,
@@ -102,13 +117,15 @@ impl App {
             pausado: false,
             salir: false,
             tabla_proc: TableState::default().with_selected(0),
-            orden_proc: OrdenProc::Cpu,
-            desc: true,
+            orden_proc: orden,
+            desc: orden.descendente_por_defecto(),
             busqueda: String::new(),
-            solo_mios: false,
+            solo_mios: config.procesos.solo_mios,
             sel_pid: None,
             mensaje: None,
         };
+        // `ir_a` también activa la consulta de la GPU NVIDIA si se empieza en esa pestaña.
+        app.ir_a(config.pestana_inicial);
         app.sincronizar_seleccion();
         app
     }
@@ -216,8 +233,7 @@ impl App {
             self.desc = !self.desc;
         } else {
             self.orden_proc = o;
-            // Números de mayor a menor; texto de A a Z.
-            self.desc = matches!(o, OrdenProc::Cpu | OrdenProc::Memoria);
+            self.desc = o.descendente_por_defecto();
         }
         self.al_inicio();
     }

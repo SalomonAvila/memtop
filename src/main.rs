@@ -4,10 +4,12 @@
 //! - [`sistema`]: lectura de CPU, memoria, discos, red, procesos, sensores y batería.
 //! - [`gpu`] y [`pci`]: detección de GPUs y sus nombres comerciales.
 //! - [`foto`]: panel de imágenes y pixel art.
+//! - [`config`]: archivo de configuración.
 //! - [`app`]: estado de la interfaz y manejo de teclas.
 //! - [`ui`]: dibujo de cada pestaña con ratatui.
 
 mod app;
+mod config;
 mod foto;
 mod gpu;
 mod pci;
@@ -28,6 +30,7 @@ use ratatui::DefaultTerminal;
 use ratatui_image::picker::{Picker, ProtocolType};
 
 use app::App;
+use config::Config;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -39,32 +42,49 @@ USO:
 
 OPCIONES:
     --foto RUTA             Imagen o carpeta de imágenes para el panel izquierdo
-                            (por defecto: $XDG_CONFIG_HOME/memtop/fotos o ~/.config/memtop/fotos)
     --sin-pokemon           No mostrar Pokémon aunque pokemon-colorscripts esté instalado
     --halfblocks            Dibujar las imágenes con caracteres ▀ aunque la terminal admita gráficos
-    -i, --intervalo SEG     Segundos entre actualizaciones (por defecto 1, mínimo 0.2)
+    -i, --intervalo SEG     Segundos entre actualizaciones (mínimo 0.2)
+    -c, --config RUTA       Usar este archivo de configuración
+    --config-ejemplo        Imprimir una configuración de ejemplo comentada
     -V, --version           Mostrar la versión
     -h, --help              Mostrar esta ayuda
+
+CONFIGURACIÓN:
+    Se lee $XDG_CONFIG_HOME/memtop/config.toml (normalmente ~/.config/memtop/config.toml)
+    si existe. Las opciones de arriba tienen prioridad sobre el archivo. Para crearlo:
+
+        mkdir -p ~/.config/memtop && memtop --config-ejemplo > ~/.config/memtop/config.toml
 
 Dentro de memtop pulsa ? para ver todas las teclas.
 ";
 
-#[derive(Debug, PartialEq)]
+/// Opciones de la línea de comandos. `None` = no se indicó y manda la configuración.
+#[derive(Debug, Default, PartialEq)]
 struct Opciones {
+    config: Option<PathBuf>,
     foto: Option<PathBuf>,
-    pokemon: bool,
-    halfblocks: bool,
-    intervalo: Duration,
+    pokemon: Option<bool>,
+    halfblocks: Option<bool>,
+    intervalo: Option<f64>,
 }
 
-impl Default for Opciones {
-    fn default() -> Self {
-        Self {
-            foto: None,
-            pokemon: true,
-            halfblocks: false,
-            intervalo: Duration::from_secs(1),
+impl Opciones {
+    /// Aplica sobre la configuración las opciones indicadas en la línea de comandos.
+    fn aplicar(self, mut c: Config) -> Config {
+        if let Some(i) = self.intervalo {
+            c.intervalo = i;
         }
+        if let Some(f) = self.foto {
+            c.fotos.carpeta = Some(f);
+        }
+        if let Some(p) = self.pokemon {
+            c.fotos.pokemon = p;
+        }
+        if let Some(h) = self.halfblocks {
+            c.fotos.halfblocks = h;
+        }
+        c
     }
 }
 
@@ -73,6 +93,7 @@ enum Accion {
     Ejecutar(Opciones),
     Ayuda,
     Version,
+    ConfigEjemplo,
 }
 
 fn leer_opciones(args: impl IntoIterator<Item = String>) -> Result<Accion, String> {
@@ -82,20 +103,26 @@ fn leer_opciones(args: impl IntoIterator<Item = String>) -> Result<Accion, Strin
         match a.as_str() {
             "-h" | "--help" => return Ok(Accion::Ayuda),
             "-V" | "--version" => return Ok(Accion::Version),
+            "--config-ejemplo" => return Ok(Accion::ConfigEjemplo),
+            "-c" | "--config" => {
+                o.config = Some(PathBuf::from(
+                    args.next().ok_or("--config necesita una ruta")?,
+                ))
+            }
             "--foto" => {
                 o.foto = Some(PathBuf::from(
                     args.next().ok_or("--foto necesita una ruta")?,
                 ))
             }
-            "--sin-pokemon" => o.pokemon = false,
-            "--halfblocks" => o.halfblocks = true,
+            "--sin-pokemon" => o.pokemon = Some(false),
+            "--halfblocks" => o.halfblocks = Some(true),
             "-i" | "--intervalo" => {
                 let s: f64 = args
                     .next()
                     .and_then(|v| v.replace(',', ".").parse().ok())
-                    .filter(|v: &f64| v.is_finite() && *v >= 0.2)
+                    .filter(|v: &f64| v.is_finite() && *v >= config::INTERVALO_MINIMO)
                     .ok_or("--intervalo necesita un número de segundos (mínimo 0.2)")?;
-                o.intervalo = Duration::from_secs_f64(s);
+                o.intervalo = Some(s);
             }
             otro => return Err(format!("opción desconocida: {otro}")),
         }
@@ -114,8 +141,20 @@ fn main() -> ExitCode {
             println!("memtop {VERSION}");
             return ExitCode::SUCCESS;
         }
+        Ok(Accion::ConfigEjemplo) => {
+            print!("{}", config::EJEMPLO);
+            return ExitCode::SUCCESS;
+        }
         Err(e) => {
             eprintln!("memtop: {e}\nPrueba `memtop --help`.");
+            return ExitCode::from(2);
+        }
+    };
+
+    let config = match config::cargar(opciones.config.as_deref()) {
+        Ok(c) => opciones.aplicar(c),
+        Err(e) => {
+            eprintln!("memtop: {e:#}");
             return ExitCode::from(2);
         }
     };
@@ -125,7 +164,7 @@ fn main() -> ExitCode {
         return ExitCode::FAILURE;
     }
 
-    match iniciar(opciones) {
+    match iniciar(config) {
         Ok(()) => ExitCode::SUCCESS,
         Err(e) => {
             eprintln!("memtop: {e:#}");
@@ -134,7 +173,8 @@ fn main() -> ExitCode {
     }
 }
 
-fn iniciar(opciones: Opciones) -> Result<()> {
+fn iniciar(config: Config) -> Result<()> {
+    ui::fijar_tema(config.colores.clone());
     // Primera lectura antes de entrar a la interfaz: el uso de CPU necesita dos muestras.
     let monitor = sistema::Monitor::new()?;
 
@@ -142,13 +182,14 @@ fn iniciar(opciones: Opciones) -> Result<()> {
     // que restaura la terminal si el programa entra en pánico.
     let mut terminal = ratatui::init();
     // La consulta del protocolo de imágenes necesita el modo raw ya activo.
-    let picker = if opciones.halfblocks {
+    let picker = if config.fotos.halfblocks {
         Picker::halfblocks()
     } else {
         Picker::from_query_stdio().unwrap_or_else(|_| Picker::halfblocks())
     };
-    let fotos = foto::Fotos::new(picker, opciones.foto, opciones.pokemon);
-    let resultado = ejecutar(&mut terminal, App::new(monitor, fotos), opciones.intervalo);
+    let fotos = foto::Fotos::new(picker, config.fotos.carpeta.clone(), config.fotos.pokemon);
+    let app = App::new(monitor, fotos, &config);
+    let resultado = ejecutar(&mut terminal, app, config.intervalo());
     ratatui::restore();
     resultado
 }
@@ -195,38 +236,62 @@ mod tests {
         leer_opciones(args.iter().map(|s| s.to_string()))
     }
 
+    fn opciones(args: &[&str]) -> Opciones {
+        match leer(args) {
+            Ok(Accion::Ejecutar(o)) => o,
+            otro => panic!("debería ejecutar: {otro:?}"),
+        }
+    }
+
     #[test]
-    fn sin_argumentos_usa_los_valores_por_defecto() {
-        assert_eq!(leer(&[]), Ok(Accion::Ejecutar(Opciones::default())));
+    fn sin_argumentos_no_cambia_la_configuracion() {
+        assert_eq!(opciones(&[]), Opciones::default());
+        assert_eq!(opciones(&[]).aplicar(Config::default()), Config::default());
     }
 
     #[test]
     fn interpreta_todas_las_opciones() {
-        let Ok(Accion::Ejecutar(o)) = leer(&[
+        let o = opciones(&[
             "--foto",
             "/tmp/a.png",
             "--sin-pokemon",
             "--halfblocks",
             "-i",
             "2,5",
-        ]) else {
-            panic!("debería ejecutar");
-        };
-        assert_eq!(o.foto, Some(PathBuf::from("/tmp/a.png")));
-        assert!(!o.pokemon);
-        assert!(o.halfblocks);
-        assert_eq!(o.intervalo, Duration::from_millis(2500));
+            "-c",
+            "/tmp/c.toml",
+        ]);
+        assert_eq!(o.config, Some(PathBuf::from("/tmp/c.toml")));
+        let c = o.aplicar(Config::default());
+        assert_eq!(c.fotos.carpeta, Some(PathBuf::from("/tmp/a.png")));
+        assert!(!c.fotos.pokemon);
+        assert!(c.fotos.halfblocks);
+        assert_eq!(c.intervalo(), Duration::from_millis(2500));
     }
 
     #[test]
-    fn ayuda_y_version() {
+    fn las_opciones_tienen_prioridad_sobre_el_archivo() {
+        let archivo =
+            config::interpretar("intervalo = 5.0\n[fotos]\npokemon = true\nhalfblocks = true")
+                .unwrap();
+        let c = opciones(&["-i", "2", "--sin-pokemon"]).aplicar(archivo);
+        assert_eq!(c.intervalo, 2.0);
+        assert!(!c.fotos.pokemon);
+        // Lo que no se indicó en la línea de comandos sale del archivo.
+        assert!(c.fotos.halfblocks);
+    }
+
+    #[test]
+    fn acciones_que_no_abren_la_interfaz() {
         assert_eq!(leer(&["--help"]), Ok(Accion::Ayuda));
         assert_eq!(leer(&["-V"]), Ok(Accion::Version));
+        assert_eq!(leer(&["--config-ejemplo"]), Ok(Accion::ConfigEjemplo));
     }
 
     #[test]
     fn rechaza_valores_invalidos() {
         assert!(leer(&["--foto"]).is_err());
+        assert!(leer(&["--config"]).is_err());
         assert!(leer(&["-i", "0.1"]).is_err());
         assert!(leer(&["-i", "nan"]).is_err());
         assert!(leer(&["--desconocida"]).is_err());

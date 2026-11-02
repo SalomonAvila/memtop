@@ -1,0 +1,55 @@
+# Configuración de memtop
+#
+# Ruta: $XDG_CONFIG_HOME/memtop/config.toml (normalmente ~/.config/memtop/config.toml).
+# Genera este archivo con:
+#
+#     mkdir -p ~/.config/memtop && memtop --config-ejemplo > ~/.config/memtop/config.toml
+#
+# Todas las claves son opcionales: las que borres o dejes comentadas usan el valor por
+# defecto que aparece aquí. Las opciones de la línea de comandos (--intervalo, --foto,
+# --sin-pokemon, --halfblocks) tienen prioridad sobre este archivo.
+
+# Segundos entre actualizaciones de los datos. Mínimo 0.2.
+intervalo = 1.0
+
+# Pestaña que se muestra al abrir:
+# "resumen", "cpu", "ram", "almacenamiento", "gpu", "red" o "procesos".
+pestana_inicial = "resumen"
+
+[fotos]
+# Imagen o carpeta de imágenes del panel izquierdo. Admite "~" para tu carpeta personal.
+# Por defecto: $XDG_CONFIG_HOME/memtop/fotos
+# carpeta = "~/Imágenes/memtop"
+
+# Mostrar un Pokémon al azar si pokemon-colorscripts está instalado.
+pokemon = true
+
+# Dibujar las imágenes con caracteres ▀ aunque la terminal admita gráficos.
+halfblocks = false
+
+[procesos]
+# Columna de orden inicial: "cpu", "memoria", "pid", "nombre" o "usuario".
+# Números de mayor a menor; texto de la A a la Z.
+orden = "cpu"
+
+# Mostrar solo los procesos del usuario actual al abrir.
+solo_mios = false
+
+[colores]
+# Formatos admitidos:
+#   - nombres: black, red, green, yellow, blue, magenta, cyan, gray, darkgray, white,
+#     y sus variantes light (lightred, lightblue, lightcyan…)
+#   - hexadecimal: "#rrggbb"
+#   - paleta de 256 colores: "0" a "255"
+
+# Títulos, pestaña activa y teclas del pie.
+acento = "cyan"
+
+# Bordes y textos secundarios.
+tenue = "darkgray"
+
+# Nombres de los campos ("CPU", "Memoria"…).
+etiqueta = "lightblue"
+
+# Fondo de la fila seleccionada en la tabla de procesos.
+seleccion = "#233755"

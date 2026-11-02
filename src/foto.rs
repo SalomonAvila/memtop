@@ -49,11 +49,9 @@ pub struct Fotos {
     pub version: u64,
 }
 
+/// Carpeta de fotos por defecto: `$XDG_CONFIG_HOME/memtop/fotos`.
 pub fn carpeta_por_defecto() -> PathBuf {
-    let base = env::var_os("XDG_CONFIG_HOME")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from(env::var_os("HOME").unwrap_or_default()).join(".config"));
-    base.join("memtop/fotos")
+    crate::config::carpeta().join("fotos")
 }
 
 /// La carpeta de fotos para mostrarla al usuario, con `~` en lugar de `$HOME`.

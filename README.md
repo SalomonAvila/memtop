@@ -12,6 +12,7 @@ distribuye como un único binario estático, sin dependencias del sistema.
 - [Pantalla](#pantalla)
 - [Instalación](#instalación)
 - [Uso](#uso)
+- [Configuración](#configuración)
 - [Teclas](#teclas)
 - [Panel de imagen](#panel-de-imagen)
 - [Datos y permisos](#datos-y-permisos)
@@ -49,7 +50,8 @@ distribuye como un único binario estático, sin dependencias del sistema.
 | 6 | Red | Historial de descarga y subida, e interfaces con IP, MAC, velocidad actual y totales |
 | 7 | Procesos | Lista estilo htop con búsqueda, orden por columnas, filtro de procesos propios y envío de señales |
 
-Los datos se actualizan cada segundo (configurable con `--intervalo`).
+Los datos se actualizan cada segundo (configurable con `--intervalo` o en el
+[archivo de configuración](#configuración)).
 
 ## Instalación
 
@@ -127,10 +129,71 @@ memtop --sin-pokemon --intervalo 2      # sin Pokémon, actualizando cada 2 s
 | `--sin-pokemon` | No mostrar Pokémon aunque `pokemon-colorscripts` esté instalado |
 | `--halfblocks` | Dibujar las imágenes con caracteres `▀` aunque la terminal admita gráficos |
 | `-i`, `--intervalo SEG` | Segundos entre actualizaciones. Por defecto `1`, mínimo `0.2` |
+| `-c`, `--config RUTA` | Usar este archivo de configuración en lugar del de por defecto |
+| `--config-ejemplo` | Imprimir una configuración de ejemplo comentada y salir |
 | `-V`, `--version` | Mostrar la versión |
 | `-h`, `--help` | Mostrar la ayuda |
 
-Códigos de salida: `0` correcto, `1` error en tiempo de ejecución, `2` opción inválida.
+Códigos de salida: `0` correcto, `1` error en tiempo de ejecución, `2` opción inválida o
+error en el archivo de configuración.
+
+## Configuración
+
+memtop lee `$XDG_CONFIG_HOME/memtop/config.toml` (normalmente
+`~/.config/memtop/config.toml`) si existe. Si no existe, usa los valores por defecto. Para
+crearlo con todas las opciones comentadas:
+
+```sh
+mkdir -p ~/.config/memtop
+memtop --config-ejemplo > ~/.config/memtop/config.toml
+```
+
+La plantilla completa está en [`config.ejemplo.toml`](config.ejemplo.toml). Todas las claves
+son opcionales:
+
+| Clave | Valores | Por defecto |
+|---|---|---|
+| `intervalo` | Segundos entre actualizaciones, `0.2` o más | `1.0` |
+| `pestana_inicial` | `"resumen"`, `"cpu"`, `"ram"`, `"almacenamiento"`, `"gpu"`, `"red"`, `"procesos"` | `"resumen"` |
+| `[fotos] carpeta` | Imagen o carpeta; admite `~` | `$XDG_CONFIG_HOME/memtop/fotos` |
+| `[fotos] pokemon` | `true` / `false` | `true` |
+| `[fotos] halfblocks` | `true` / `false` | `false` |
+| `[procesos] orden` | `"cpu"`, `"memoria"`, `"pid"`, `"nombre"`, `"usuario"` | `"cpu"` |
+| `[procesos] solo_mios` | `true` / `false` | `false` |
+| `[colores] acento` | Color de títulos, pestaña activa y teclas | `"cyan"` |
+| `[colores] tenue` | Color de bordes y textos secundarios | `"darkgray"` |
+| `[colores] etiqueta` | Color de los nombres de campo | `"lightblue"` |
+| `[colores] seleccion` | Fondo de la fila seleccionada en Procesos | `"#233755"` |
+
+Los colores aceptan nombres (`red`, `lightcyan`, `darkgray`…), hexadecimal (`"#rrggbb"`) o
+un índice de la paleta de 256 colores (`"0"` a `"255"`).
+
+Por ejemplo, para abrir siempre en Procesos, ordenado por memoria y con acento verde:
+
+```toml
+pestana_inicial = "procesos"
+
+[procesos]
+orden = "memoria"
+
+[colores]
+acento = "green"
+```
+
+**Prioridad:** valores por defecto < archivo < opciones de la línea de comandos. Por ejemplo,
+`memtop -i 2` usa un intervalo de 2 s aunque el archivo diga otra cosa, pero respeta el resto
+del archivo.
+
+**Errores:** si el archivo tiene un error de sintaxis, una clave desconocida (por ejemplo una
+errata como `pokemn`) o un valor no válido, memtop no arranca y muestra la línea exacta:
+
+```
+memtop: error en ~/.config/memtop/config.toml: TOML parse error at line 3, column 1
+  |
+3 | pokemn = false
+  | ^^^^^^
+unknown field `pokemn`, expected one of `carpeta`, `pokemon`, `halfblocks`
+```
 
 ## Teclas
 
@@ -230,13 +293,14 @@ memtop/
 │   └── actualizar-pci-ids.sh   Regenera data/pci-gpu.ids
 ├── src/
 │   ├── main.rs                 Opciones de línea de comandos y bucle principal
+│   ├── config.rs               Archivo de configuración
 │   ├── app.rs                  Estado de la interfaz y teclas
 │   ├── ui.rs                   Dibujo de todas las pestañas
 │   ├── sistema.rs              Lectura de CPU, memoria, discos, red, procesos, sensores y batería
 │   ├── gpu.rs                  Detección de GPUs y consulta a nvidia-smi
 │   ├── pci.rs                  Nombres de GPU a partir de la base PCI incluida
 │   └── foto.rs                 Panel de imagen, sprites y logo
-├── CHANGELOG.md
+├── config.ejemplo.toml         Plantilla de configuración (también en memtop --config-ejemplo)
 ├── Cargo.toml
 ├── Cargo.lock
 ├── LICENSE
@@ -254,7 +318,7 @@ scripts/actualizar-pci-ids.sh /usr/share/hwdata/pci.ids   # o usa una copia loca
 
 ### Publicar una versión
 
-1. Actualiza `version` en `Cargo.toml` y añade la entrada en `CHANGELOG.md`.
+1. Actualiza `version` en `Cargo.toml`.
 2. Crea y sube la etiqueta:
    ```sh
    git tag v0.2.0

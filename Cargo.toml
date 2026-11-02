@@ -17,7 +17,9 @@ crossterm = "0.29"
 image = "0.25"
 ratatui = "0.30"
 ratatui-image = { version = "11", default-features = false, features = ["crossterm", "image-defaults"] }
+serde = { version = "1.0.229", features = ["derive"] }
 sysinfo = { version = "0.40", default-features = false, features = ["component", "disk", "network", "system", "user"] }
+toml = { version = "0.9", default-features = false, features = ["parse", "serde"] }
 
 [profile.release]
 lto = true

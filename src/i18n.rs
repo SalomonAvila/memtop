@@ -1,12 +1,15 @@
 //! Idioma de la interfaz y textos traducidos.
 //!
-//! El idioma se detecta del entorno con [`detectar`]. Los textos se obtienen con [`t`],
-//! que devuelve la tabla del idioma activo.
+//! El idioma se elige una vez al arrancar con [`fijar`], a partir de la opción
+//! `--idioma`, la clave `idioma` de la configuración o, si ambas son `auto`, del entorno
+//! ([`detectar`]). Los textos se obtienen con [`t`], que devuelve la tabla del idioma activo.
 //!
 //! Para añadir un texto: crea el campo en [`Textos`] y dale valor en [`ES`] y [`EN`].
 //! El compilador obliga a traducirlo en los dos idiomas.
 
-use std::{env, sync::OnceLock};
+use std::{env, str::FromStr, sync::OnceLock};
+
+use serde::Deserialize;
 
 /// Idiomas disponibles.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -15,9 +18,48 @@ pub enum Idioma {
     En,
 }
 
+/// Idioma pedido por el usuario en la configuración o en `--idioma`.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Preferencia {
+    /// Detectar del entorno (`LANG`…).
+    #[default]
+    Auto,
+    Es,
+    En,
+}
+
+impl Preferencia {
+    pub fn resolver(self) -> Idioma {
+        match self {
+            Preferencia::Auto => detectar(),
+            Preferencia::Es => Idioma::Es,
+            Preferencia::En => Idioma::En,
+        }
+    }
+}
+
+impl FromStr for Preferencia {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, ()> {
+        match s.to_lowercase().as_str() {
+            "auto" => Ok(Preferencia::Auto),
+            "es" => Ok(Preferencia::Es),
+            "en" => Ok(Preferencia::En),
+            _ => Err(()),
+        }
+    }
+}
+
 static IDIOMA: OnceLock<Idioma> = OnceLock::new();
 
-/// Idioma activo: el del entorno, detectado la primera vez que se consulta.
+/// Fija el idioma de la interfaz. Se llama una vez al arrancar, antes del primer dibujo.
+pub fn fijar(idioma: Idioma) {
+    let _ = IDIOMA.set(idioma);
+}
+
+/// Idioma activo: el fijado con [`fijar`] o, si no se fijó, el del entorno.
 pub fn actual() -> Idioma {
     *IDIOMA.get_or_init(detectar)
 }
@@ -140,6 +182,20 @@ mod tests {
             con(&[("LANG", ""), ("LC_ALL", ""), ("LC_MESSAGES", "es_AR")]),
             Idioma::Es
         );
+    }
+
+    #[test]
+    fn la_preferencia_explicita_ignora_el_entorno() {
+        assert_eq!(Preferencia::Es.resolver(), Idioma::Es);
+        assert_eq!(Preferencia::En.resolver(), Idioma::En);
+    }
+
+    #[test]
+    fn lee_la_preferencia_de_texto() {
+        assert_eq!("auto".parse(), Ok(Preferencia::Auto));
+        assert_eq!("ES".parse(), Ok(Preferencia::Es));
+        assert_eq!("en".parse(), Ok(Preferencia::En));
+        assert_eq!("fr".parse::<Preferencia>(), Err(()));
     }
 
     #[test]

@@ -129,6 +129,7 @@ memtop --sin-pokemon --intervalo 2      # sin Pokémon, actualizando cada 2 s
 | `--sin-pokemon` | No mostrar Pokémon aunque `pokemon-colorscripts` esté instalado |
 | `--halfblocks` | Dibujar las imágenes con caracteres `▀` aunque la terminal admita gráficos |
 | `-i`, `--intervalo SEG` | Segundos entre actualizaciones. Por defecto `1`, mínimo `0.2` |
+| `--idioma IDIOMA` | Idioma de la interfaz: `auto` (según `LANG`), `es` o `en` |
 | `-c`, `--config RUTA` | Usar este archivo de configuración en lugar del de por defecto |
 | `--config-ejemplo` | Imprimir una configuración de ejemplo comentada y salir |
 | `-V`, `--version` | Mostrar la versión |
@@ -153,6 +154,7 @@ son opcionales:
 
 | Clave | Valores | Por defecto |
 |---|---|---|
+| `idioma` | `"auto"` (según `LANGUAGE`, `LC_ALL`, `LC_MESSAGES` o `LANG`), `"es"`, `"en"` | `"auto"` |
 | `intervalo` | Segundos entre actualizaciones, `0.2` o más | `1.0` |
 | `pestana_inicial` | `"resumen"`, `"cpu"`, `"ram"`, `"almacenamiento"`, `"gpu"`, `"red"`, `"procesos"` | `"resumen"` |
 | `[fotos] carpeta` | Imagen o carpeta; admite `~` | `$XDG_CONFIG_HOME/memtop/fotos` |

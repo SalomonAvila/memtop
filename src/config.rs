@@ -16,7 +16,10 @@ use anyhow::{Context, Result, bail};
 use ratatui::style::Color;
 use serde::{Deserialize, Deserializer, de};
 
-use crate::app::{OrdenProc, Pestana};
+use crate::{
+    app::{OrdenProc, Pestana},
+    i18n::Preferencia,
+};
 
 /// Plantilla documentada; coincide con los valores por defecto (lo comprueba una prueba).
 pub const EJEMPLO: &str = include_str!("../config.ejemplo.toml");
@@ -27,6 +30,8 @@ pub const INTERVALO_MINIMO: f64 = 0.2;
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct Config {
+    /// Idioma de la interfaz.
+    pub idioma: Preferencia,
     /// Segundos entre actualizaciones.
     pub intervalo: f64,
     pub pestana_inicial: Pestana,
@@ -68,6 +73,7 @@ pub struct Tema {
 impl Default for Config {
     fn default() -> Self {
         Self {
+            idioma: Preferencia::Auto,
             intervalo: 1.0,
             pestana_inicial: Pestana::Resumen,
             fotos: Fotos::default(),
@@ -195,6 +201,7 @@ mod tests {
     fn lee_todas_las_claves() {
         let c = interpretar(
             r##"
+            idioma = "en"
             intervalo = 2.5
             pestana_inicial = "procesos"
             [fotos]
@@ -212,6 +219,7 @@ mod tests {
             "##,
         )
         .unwrap();
+        assert_eq!(c.idioma, Preferencia::En);
         assert_eq!(c.intervalo(), Duration::from_millis(2500));
         assert_eq!(c.pestana_inicial, Pestana::Procesos);
         assert_eq!(c.fotos.carpeta, Some(PathBuf::from("/srv/fotos")));
@@ -243,6 +251,7 @@ mod tests {
     #[test]
     fn rechaza_valores_invalidos() {
         assert!(interpretar("intervalo = 0.1").is_err());
+        assert!(interpretar("idioma = \"fr\"").is_err());
         assert!(interpretar("intervalo = \"1\"").is_err());
         assert!(interpretar("pestana_inicial = \"inicio\"").is_err());
         assert!(interpretar("[procesos]\norden = \"tamaño\"").is_err());

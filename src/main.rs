@@ -47,6 +47,7 @@ OPCIONES:
     --sin-pokemon           No mostrar Pokémon aunque pokemon-colorscripts esté instalado
     --halfblocks            Dibujar las imágenes con caracteres ▀ aunque la terminal admita gráficos
     -i, --intervalo SEG     Segundos entre actualizaciones (mínimo 0.2)
+    --idioma IDIOMA         Idioma de la interfaz: auto (según LANG), es o en
     -c, --config RUTA       Usar este archivo de configuración
     --config-ejemplo        Imprimir una configuración de ejemplo comentada
     -V, --version           Mostrar la versión
@@ -69,6 +70,7 @@ struct Opciones {
     pokemon: Option<bool>,
     halfblocks: Option<bool>,
     intervalo: Option<f64>,
+    idioma: Option<i18n::Preferencia>,
 }
 
 impl Opciones {
@@ -85,6 +87,9 @@ impl Opciones {
         }
         if let Some(h) = self.halfblocks {
             c.fotos.halfblocks = h;
+        }
+        if let Some(i) = self.idioma {
+            c.idioma = i;
         }
         c
     }
@@ -115,6 +120,15 @@ fn leer_opciones(args: impl IntoIterator<Item = String>) -> Result<Accion, Strin
                 o.foto = Some(PathBuf::from(
                     args.next().ok_or("--foto necesita una ruta")?,
                 ))
+            }
+            "--idioma" => {
+                let v = args
+                    .next()
+                    .ok_or("--idioma necesita un valor: auto, es o en")?;
+                let i = v
+                    .parse()
+                    .map_err(|_| format!("--idioma no admite {v:?}: usa auto, es o en"))?;
+                o.idioma = Some(i);
             }
             "--sin-pokemon" => o.pokemon = Some(false),
             "--halfblocks" => o.halfblocks = Some(true),
@@ -176,6 +190,7 @@ fn main() -> ExitCode {
 }
 
 fn iniciar(config: Config) -> Result<()> {
+    i18n::fijar(config.idioma.resolver());
     ui::fijar_tema(config.colores.clone());
     // Primera lectura antes de entrar a la interfaz: el uso de CPU necesita dos muestras.
     let monitor = sistema::Monitor::new()?;
@@ -254,6 +269,8 @@ mod tests {
     #[test]
     fn interpreta_todas_las_opciones() {
         let o = opciones(&[
+            "--idioma",
+            "en",
             "--foto",
             "/tmp/a.png",
             "--sin-pokemon",
@@ -268,17 +285,20 @@ mod tests {
         assert_eq!(c.fotos.carpeta, Some(PathBuf::from("/tmp/a.png")));
         assert!(!c.fotos.pokemon);
         assert!(c.fotos.halfblocks);
+        assert_eq!(c.idioma, i18n::Preferencia::En);
         assert_eq!(c.intervalo(), Duration::from_millis(2500));
     }
 
     #[test]
     fn las_opciones_tienen_prioridad_sobre_el_archivo() {
-        let archivo =
-            config::interpretar("intervalo = 5.0\n[fotos]\npokemon = true\nhalfblocks = true")
-                .unwrap();
-        let c = opciones(&["-i", "2", "--sin-pokemon"]).aplicar(archivo);
+        let archivo = config::interpretar(
+            "idioma = \"es\"\nintervalo = 5.0\n[fotos]\npokemon = true\nhalfblocks = true",
+        )
+        .unwrap();
+        let c = opciones(&["-i", "2", "--sin-pokemon", "--idioma", "en"]).aplicar(archivo);
         assert_eq!(c.intervalo, 2.0);
         assert!(!c.fotos.pokemon);
+        assert_eq!(c.idioma, i18n::Preferencia::En);
         // Lo que no se indicó en la línea de comandos sale del archivo.
         assert!(c.fotos.halfblocks);
     }
@@ -294,6 +314,8 @@ mod tests {
     fn rechaza_valores_invalidos() {
         assert!(leer(&["--foto"]).is_err());
         assert!(leer(&["--config"]).is_err());
+        assert!(leer(&["--idioma"]).is_err());
+        assert!(leer(&["--idioma", "fr"]).is_err());
         assert!(leer(&["-i", "0.1"]).is_err());
         assert!(leer(&["-i", "nan"]).is_err());
         assert!(leer(&["--desconocida"]).is_err());

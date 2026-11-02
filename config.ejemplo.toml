@@ -7,7 +7,10 @@
 #
 # Todas las claves son opcionales: las que borres o dejes comentadas usan el valor por
 # defecto que aparece aquí. Las opciones de la línea de comandos (--intervalo, --foto,
-# --sin-pokemon, --halfblocks) tienen prioridad sobre este archivo.
+# --sin-pokemon, --halfblocks, --idioma) tienen prioridad sobre este archivo.
+
+# Idioma de la interfaz: "auto" (según LANG y similares), "es" o "en".
+idioma = "auto"
 
 # Segundos entre actualizaciones de los datos. Mínimo 0.2.
 intervalo = 1.0

@@ -164,6 +164,67 @@ pub struct Textos {
     pub col_mem: &'static str,
     pub col_res: &'static str,
     pub col_usuario: &'static str,
+
+    // Pestaña CPU
+    pub titulo_procesador: &'static str,
+    pub modelo: &'static str,
+    pub nucleos: &'static str,
+    pub fisicos: &'static str,
+    pub hilos: &'static str,
+    pub frecuencia: &'static str,
+    pub carga_media: &'static str,
+    pub arquitectura: &'static str,
+    pub temperatura: &'static str,
+    pub uso_total: &'static str,
+    pub ultimos: &'static str,
+    pub titulo_por_hilo: &'static str,
+    pub titulo_sensores: &'static str,
+
+    // Pestaña RAM
+    pub usada: &'static str,
+    pub cache: &'static str,
+    pub total: &'static str,
+    pub disponible: &'static str,
+    pub libre: &'static str,
+    pub buffers: &'static str,
+    pub compartida: &'static str,
+    pub swap_total: &'static str,
+    pub swap_usada: &'static str,
+    pub titulo_detalle: &'static str,
+    pub titulo_top_memoria: &'static str,
+
+    // Pestaña Almacenamiento
+    pub titulo_discos: &'static str,
+    pub col_disco: &'static str,
+    pub col_tipo: &'static str,
+    pub col_tamano: &'static str,
+    pub col_temp: &'static str,
+    pub col_lectura: &'static str,
+    pub col_escritura: &'static str,
+    pub titulo_particiones: &'static str,
+    pub usados: &'static str,
+    pub libres_de: &'static str,
+
+    // Pestaña GPU
+    pub gpu_ninguna: &'static str,
+    pub fabricante: &'static str,
+    pub driver: &'static str,
+    pub pci: &'static str,
+    pub estado: &'static str,
+    pub gpu_estado_activa: &'static str,
+    pub gpu_estado_reposo: &'static str,
+    pub vram: &'static str,
+    pub consumo: &'static str,
+    pub gpu_consultando: &'static str,
+    pub gpu_no_despertar: &'static str,
+
+    // Pestaña Red
+    pub descarga: &'static str,
+    pub subida: &'static str,
+    pub titulo_interfaces: &'static str,
+    pub col_interfaz: &'static str,
+    pub col_ahora: &'static str,
+    pub col_total: &'static str,
 }
 
 pub const ES: Textos = Textos {
@@ -223,6 +284,67 @@ pub const ES: Textos = Textos {
     col_mem: "MEM%",
     col_res: "RES",
     col_usuario: "Usuario",
+
+    // Pestaña CPU
+    titulo_procesador: "Procesador",
+    modelo: "Modelo",
+    nucleos: "Núcleos",
+    fisicos: "físicos",
+    hilos: "hilos",
+    frecuencia: "Frecuencia",
+    carga_media: "Carga media",
+    arquitectura: "Arquitectura",
+    temperatura: "Temperatura",
+    uso_total: "Uso total",
+    ultimos: "últimos",
+    titulo_por_hilo: "Por hilo",
+    titulo_sensores: "Sensores",
+
+    // Pestaña RAM
+    usada: "Usada",
+    cache: "Caché",
+    total: "Total",
+    disponible: "Disponible",
+    libre: "Libre",
+    buffers: "Buffers",
+    compartida: "Compartida",
+    swap_total: "Swap total",
+    swap_usada: "Swap usada",
+    titulo_detalle: "Detalle",
+    titulo_top_memoria: "Procesos con más memoria",
+
+    // Pestaña Almacenamiento
+    titulo_discos: "Discos físicos",
+    col_disco: "Disco",
+    col_tipo: "Tipo",
+    col_tamano: "Tamaño",
+    col_temp: "Temp",
+    col_lectura: "Lectura",
+    col_escritura: "Escritura",
+    titulo_particiones: "Particiones montadas",
+    usados: "usados",
+    libres_de: "libres de",
+
+    // Pestaña GPU
+    gpu_ninguna: "No se encontró ninguna GPU",
+    fabricante: "Fabricante",
+    driver: "Driver",
+    pci: "PCI",
+    estado: "Estado",
+    gpu_estado_activa: "Activa",
+    gpu_estado_reposo: "En reposo (ahorrando energía)",
+    vram: "VRAM",
+    consumo: "Consumo",
+    gpu_consultando: "Consultando nvidia-smi…",
+    gpu_no_despertar: "No se le consulta nada para no despertarla.",
+
+    // Pestaña Red
+    descarga: "Descarga",
+    subida: "Subida",
+    titulo_interfaces: "Interfaces",
+    col_interfaz: "Interfaz",
+    col_ahora: "ahora",
+    col_total: "total",
 };
 
 pub const EN: Textos = Textos {
@@ -282,6 +404,67 @@ pub const EN: Textos = Textos {
     col_mem: "MEM%",
     col_res: "RES",
     col_usuario: "User",
+
+    // Pestaña CPU
+    titulo_procesador: "Processor",
+    modelo: "Model",
+    nucleos: "Cores",
+    fisicos: "physical",
+    hilos: "threads",
+    frecuencia: "Frequency",
+    carga_media: "Load average",
+    arquitectura: "Architecture",
+    temperatura: "Temperature",
+    uso_total: "Total usage",
+    ultimos: "last",
+    titulo_por_hilo: "Per thread",
+    titulo_sensores: "Sensors",
+
+    // Pestaña RAM
+    usada: "Used",
+    cache: "Cache",
+    total: "Total",
+    disponible: "Available",
+    libre: "Free",
+    buffers: "Buffers",
+    compartida: "Shared",
+    swap_total: "Swap total",
+    swap_usada: "Swap used",
+    titulo_detalle: "Details",
+    titulo_top_memoria: "Top processes by memory",
+
+    // Pestaña Almacenamiento
+    titulo_discos: "Physical disks",
+    col_disco: "Disk",
+    col_tipo: "Type",
+    col_tamano: "Size",
+    col_temp: "Temp",
+    col_lectura: "Read",
+    col_escritura: "Write",
+    titulo_particiones: "Mounted partitions",
+    usados: "used",
+    libres_de: "free of",
+
+    // Pestaña GPU
+    gpu_ninguna: "No GPU found",
+    fabricante: "Vendor",
+    driver: "Driver",
+    pci: "PCI",
+    estado: "State",
+    gpu_estado_activa: "Active",
+    gpu_estado_reposo: "Suspended (saving power)",
+    vram: "VRAM",
+    consumo: "Power draw",
+    gpu_consultando: "Querying nvidia-smi…",
+    gpu_no_despertar: "Not queried, to avoid waking it up.",
+
+    // Pestaña Red
+    descarga: "Download",
+    subida: "Upload",
+    titulo_interfaces: "Interfaces",
+    col_interfaz: "Interface",
+    col_ahora: "now",
+    col_total: "total",
 };
 
 #[cfg(test)]

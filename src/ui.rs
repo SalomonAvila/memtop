@@ -23,7 +23,8 @@ use crate::{
     app::{App, Modo, OrdenProc, Pestana},
     config::Tema,
     foto::Contenido,
-    sistema::{HISTORIAL, Proceso, Temperatura, fmt_bytes, fmt_duracion, fmt_tasa},
+    i18n,
+    sistema::{EstadoBateria, HISTORIAL, Proceso, Temperatura, fmt_bytes, fmt_duracion, fmt_tasa},
 };
 
 static TEMA: OnceLock<Tema> = OnceLock::new();
@@ -182,7 +183,10 @@ pub fn dibujar(f: &mut Frame, app: &mut App) {
     let [foto, sis] =
         Layout::vertical([Constraint::Min(6), Constraint::Length(alto_sis)]).areas(izq);
     dibujar_foto(f, app, foto);
-    f.render_widget(Paragraph::new(lineas_sis).block(bloque(" Sistema ")), sis);
+    f.render_widget(
+        Paragraph::new(lineas_sis).block(bloque(marco(i18n::t().titulo_sistema))),
+        sis,
+    );
 
     match app.pestana {
         Pestana::Resumen => tab_resumen(f, app, der),
@@ -230,7 +234,7 @@ fn dibujar_pestanas(f: &mut Frame, app: &App, area: Rect) {
     )];
     if app.pausado {
         derecha.push(Span::styled(
-            " ⏸ PAUSA ",
+            format!(" ⏸ {} ", i18n::t().pausa),
             Style::new().fg(Color::Black).bg(Color::Yellow),
         ));
         derecha.push(Span::raw(" "));
@@ -267,10 +271,11 @@ fn texto_centrado(f: &mut Frame, inner: Rect, texto: String, color: Color) {
 }
 
 fn dibujar_foto(f: &mut Frame, app: &mut App, area: Rect) {
+    let t = i18n::t();
     let pie = if app.fotos.cantidad() > 0 {
-        " f: otra ".to_string()
+        marco(t.foto_otra)
     } else {
-        format!(" tus fotos: {} ", crate::foto::carpeta_mostrada())
+        format!(" {} {} ", t.foto_tus_fotos, crate::foto::carpeta_mostrada())
     };
     let block = bloque(app.fotos.titulo.clone())
         .title_bottom(Line::styled(pie, Style::new().fg(tema().tenue)).alignment(Alignment::Right));
@@ -332,8 +337,25 @@ fn dibujar_sprite(f: &mut Frame, sp: &crate::foto::Sprite, area: Rect) {
     }
 }
 
+/// `"Memoria"` → `" Memoria "`: los títulos de los bloques llevan un espacio a cada lado.
+fn marco(texto: &str) -> String {
+    format!(" {texto} ")
+}
+
+fn estado_bateria(e: EstadoBateria) -> &'static str {
+    let t = i18n::t();
+    match e {
+        EstadoBateria::Cargando => t.bateria_cargando,
+        EstadoBateria::Descargando => t.bateria_descargando,
+        EstadoBateria::Completa => t.bateria_completa,
+        EstadoBateria::SinCargar => t.bateria_sin_cargar,
+        EstadoBateria::Desconocido => t.bateria_desconocido,
+    }
+}
+
 /// Bloque estilo fastfetch.
 fn panel_sistema(app: &App) -> Vec<Line<'static>> {
+    let t = i18n::t();
     let m = &app.monitor;
     let i = &m.info;
     let w = 11;
@@ -349,34 +371,34 @@ fn panel_sistema(app: &App) -> Vec<Line<'static>> {
         ),
     ];
     if let Some(e) = &i.modelo {
-        l.push(clave_valor("Equipo", e.clone(), w));
+        l.push(clave_valor(t.equipo, e.clone(), w));
     }
-    l.push(clave_valor("SO", i.so.clone(), w));
-    l.push(clave_valor("Kernel", i.kernel.clone(), w));
-    l.push(clave_valor("Encendido", fmt_duracion(m.uptime), w));
+    l.push(clave_valor(t.so, i.so.clone(), w));
+    l.push(clave_valor(t.kernel, i.kernel.clone(), w));
+    l.push(clave_valor(t.encendido, fmt_duracion(m.uptime), w));
     if let Some(e) = &i.escritorio {
-        l.push(clave_valor("Escritorio", e.clone(), w));
+        l.push(clave_valor(t.escritorio, e.clone(), w));
     }
     if let Some(s) = &i.shell {
-        l.push(clave_valor("Shell", s.clone(), w));
+        l.push(clave_valor(t.shell, s.clone(), w));
     }
-    if let Some(t) = &i.terminal {
-        l.push(clave_valor("Terminal", t.clone(), w));
+    if let Some(term) = &i.terminal {
+        l.push(clave_valor(t.terminal, term.clone(), w));
     }
     l.push(clave_valor(
-        "CPU",
+        t.cpu,
         format!("{} ({})", i.cpu_modelo, i.hilos),
         w,
     ));
     for g in &m.gpus {
         l.push(clave_valor(
-            "GPU",
+            t.gpu,
             format!("{} {}", g.fabricante, g.nombre),
             w,
         ));
     }
     l.push(clave_valor(
-        "Memoria",
+        t.memoria,
         format!(
             "{} / {}",
             fmt_bytes(m.memoria.usada()),
@@ -386,7 +408,7 @@ fn panel_sistema(app: &App) -> Vec<Line<'static>> {
     ));
     if let Some(raiz) = m.montajes.iter().find(|x| x.punto == "/") {
         l.push(clave_valor(
-            "Disco (/)",
+            t.disco_raiz,
             format!(
                 "{} / {} ({})",
                 fmt_bytes(raiz.usado),
@@ -398,8 +420,8 @@ fn panel_sistema(app: &App) -> Vec<Line<'static>> {
     }
     if let Some(b) = &m.bateria {
         l.push(clave_valor(
-            "Batería",
-            format!("{}% ({})", b.porcentaje, b.estado),
+            t.bateria,
+            format!("{}% ({})", b.porcentaje, estado_bateria(b.estado)),
             w,
         ));
     }
@@ -425,6 +447,7 @@ fn panel_sistema(app: &App) -> Vec<Line<'static>> {
 // ───────────────────────────── pestañas ─────────────────────────────
 
 fn tab_resumen(f: &mut Frame, app: &mut App, area: Rect) {
+    let t = i18n::t();
     let m = &app.monitor;
     let activas: Vec<_> = m
         .interfaces
@@ -444,19 +467,19 @@ fn tab_resumen(f: &mut Frame, app: &mut App, area: Rect) {
     .areas(area);
 
     // CPU: barra + gráfica
-    let block = bloque(" CPU ");
+    let block = bloque(marco(t.cpu));
     let inner = block.inner(cpu);
     f.render_widget(block, cpu);
     let [l1, graf] = Layout::vertical([Constraint::Length(1), Constraint::Min(1)]).areas(inner);
     let mut extra = format!("{:5.1}%", m.cpu_total);
-    if let Some(t) = m.temperatura_cpu() {
-        extra.push_str(&format!("  {t:.0}°C"));
+    if let Some(grados) = m.temperatura_cpu() {
+        extra.push_str(&format!("  {grados:.0}°C"));
     }
     let freq = m.cpu_freq_mhz.iter().max().copied().unwrap_or(0);
     if freq > 0 {
         extra.push_str(&format!("  {:.2} GHz", freq as f64 / 1000.0));
     }
-    f.render_widget(barra("Uso", 8, l1.width, m.cpu_total as f64, extra), l1);
+    f.render_widget(barra(t.uso, 8, l1.width, m.cpu_total as f64, extra), l1);
     let v = ultimos(&m.hist_cpu, graf.width as usize);
     f.render_widget(
         Sparkline::default()
@@ -478,7 +501,7 @@ fn tab_resumen(f: &mut Frame, app: &mut App, area: Rect) {
             format!("{} / {}", fmt_bytes(mm.usada()), fmt_bytes(mm.total)),
         ),
         barra(
-            "Swap",
+            t.swap,
             8,
             w,
             pct(mm.swap_usada(), mm.swap_total),
@@ -489,7 +512,7 @@ fn tab_resumen(f: &mut Frame, app: &mut App, area: Rect) {
             ),
         ),
     ];
-    f.render_widget(Paragraph::new(lineas).block(bloque(" Memoria ")), mem);
+    f.render_widget(Paragraph::new(lineas).block(bloque(marco(t.memoria))), mem);
 
     // Almacenamiento
     let ancho_etq = m
@@ -514,7 +537,7 @@ fn tab_resumen(f: &mut Frame, app: &mut App, area: Rect) {
         })
         .collect();
     f.render_widget(
-        Paragraph::new(lineas).block(bloque(" Almacenamiento ")),
+        Paragraph::new(lineas).block(bloque(marco(t.pestana_almacenamiento))),
         alm,
     );
 
@@ -522,22 +545,22 @@ fn tab_resumen(f: &mut Frame, app: &mut App, area: Rect) {
     let mut lineas = Vec::new();
     for g in &m.gpus {
         let estado = if g.suspendida() {
-            Span::styled("en reposo", Style::new().fg(tema().tenue))
+            Span::styled(t.gpu_en_reposo, Style::new().fg(tema().tenue))
         } else {
-            Span::styled("activa", Style::new().fg(Color::Green))
+            Span::styled(t.gpu_activa, Style::new().fg(Color::Green))
         };
         lineas.push(Line::from(vec![
-            Span::styled(format!("{:<9}", "GPU"), Style::new().fg(tema().etiqueta)),
+            Span::styled(format!("{:<9}", t.gpu), Style::new().fg(tema().etiqueta)),
             Span::raw(format!("{} · ", g.nombre)),
             estado,
         ]));
     }
     if activas.is_empty() {
-        lineas.push(clave_valor("Red", "sin conexión", 9));
+        lineas.push(clave_valor(t.red, t.red_sin_conexion, 9));
     }
     for i in &activas {
         lineas.push(Line::from(vec![
-            Span::styled(format!("{:<9}", "Red"), Style::new().fg(tema().etiqueta)),
+            Span::styled(format!("{:<9}", t.red), Style::new().fg(tema().etiqueta)),
             Span::raw(format!("{:<12}", i.nombre)),
             Span::styled(
                 format!("↓ {:<13}", fmt_tasa(i.rx_bps)),
@@ -559,16 +582,16 @@ fn tab_resumen(f: &mut Frame, app: &mut App, area: Rect) {
             Color::Red
         };
         lineas.push(barra_color(
-            "Batería",
+            t.bateria,
             9,
             otros.width.saturating_sub(2),
             b.porcentaje as f64,
-            format!("{}% {}", b.porcentaje, b.estado),
+            format!("{}% {}", b.porcentaje, estado_bateria(b.estado)),
             c,
         ));
     }
     f.render_widget(
-        Paragraph::new(lineas).block(bloque(" GPU · Red · Energía ")),
+        Paragraph::new(lineas).block(bloque(marco(t.titulo_gpu_red_energia))),
         otros,
     );
 
@@ -576,13 +599,14 @@ fn tab_resumen(f: &mut Frame, app: &mut App, area: Rect) {
     tabla_mini(
         f,
         top,
-        " Procesos con más CPU ",
+        &marco(t.titulo_top_cpu),
         &lista,
         app.monitor.memoria.total,
     );
 }
 
 fn tabla_mini(f: &mut Frame, area: Rect, titulo: &str, lista: &[&Proceso], ram_total: u64) {
+    let t = i18n::t();
     let filas = lista.iter().map(|p| {
         Row::new(vec![
             Cell::from(p.pid.to_string()).style(Style::new().fg(tema().tenue)),
@@ -606,7 +630,15 @@ fn tabla_mini(f: &mut Frame, area: Rect, titulo: &str, lista: &[&Proceso], ram_t
         ],
     )
     .header(cabecera(
-        ["PID", "Nombre", "CPU%", "MEM%", "RES", "Usuario"].map(String::from),
+        [
+            t.col_pid,
+            t.col_nombre,
+            t.col_cpu,
+            t.col_mem,
+            t.col_res,
+            t.col_usuario,
+        ]
+        .map(String::from),
     ))
     .block(bloque(titulo.to_string()));
     f.render_widget(t, area);

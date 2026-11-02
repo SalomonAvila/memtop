@@ -115,6 +115,55 @@ pub struct Textos {
     pub pestana_gpu: &'static str,
     pub pestana_red: &'static str,
     pub pestana_procesos: &'static str,
+
+    // Barra superior
+    pub pausa: &'static str,
+
+    // Panel de imagen
+    pub foto_otra: &'static str,
+    pub foto_tus_fotos: &'static str,
+    pub foto_no_se_pudo_abrir: &'static str,
+    pub foto_dibujo_vacio: &'static str,
+
+    // Panel de sistema
+    pub titulo_sistema: &'static str,
+    pub equipo: &'static str,
+    pub so: &'static str,
+    pub kernel: &'static str,
+    pub encendido: &'static str,
+    pub escritorio: &'static str,
+    pub shell: &'static str,
+    pub terminal: &'static str,
+    pub cpu: &'static str,
+    pub gpu: &'static str,
+    pub memoria: &'static str,
+    pub disco_raiz: &'static str,
+    pub bateria: &'static str,
+
+    // Estado de la batería
+    pub bateria_cargando: &'static str,
+    pub bateria_descargando: &'static str,
+    pub bateria_completa: &'static str,
+    pub bateria_sin_cargar: &'static str,
+    pub bateria_desconocido: &'static str,
+
+    // Pestaña Resumen
+    pub uso: &'static str,
+    pub swap: &'static str,
+    pub titulo_gpu_red_energia: &'static str,
+    pub titulo_top_cpu: &'static str,
+    pub red: &'static str,
+    pub red_sin_conexion: &'static str,
+    pub gpu_activa: &'static str,
+    pub gpu_en_reposo: &'static str,
+
+    // Columnas de procesos
+    pub col_pid: &'static str,
+    pub col_nombre: &'static str,
+    pub col_cpu: &'static str,
+    pub col_mem: &'static str,
+    pub col_res: &'static str,
+    pub col_usuario: &'static str,
 }
 
 pub const ES: Textos = Textos {
@@ -125,6 +174,55 @@ pub const ES: Textos = Textos {
     pestana_gpu: "GPU",
     pestana_red: "Red",
     pestana_procesos: "Procesos",
+
+    // Barra superior
+    pausa: "PAUSA",
+
+    // Panel de imagen
+    foto_otra: "f: otra",
+    foto_tus_fotos: "tus fotos:",
+    foto_no_se_pudo_abrir: "No se pudo abrir",
+    foto_dibujo_vacio: "dibujo vacío",
+
+    // Panel de sistema
+    titulo_sistema: "Sistema",
+    equipo: "Equipo",
+    so: "SO",
+    kernel: "Kernel",
+    encendido: "Encendido",
+    escritorio: "Escritorio",
+    shell: "Shell",
+    terminal: "Terminal",
+    cpu: "CPU",
+    gpu: "GPU",
+    memoria: "Memoria",
+    disco_raiz: "Disco (/)",
+    bateria: "Batería",
+
+    // Estado de la batería
+    bateria_cargando: "Cargando",
+    bateria_descargando: "Descargando",
+    bateria_completa: "Completa",
+    bateria_sin_cargar: "Conectada, sin cargar",
+    bateria_desconocido: "Desconocido",
+
+    // Pestaña Resumen
+    uso: "Uso",
+    swap: "Swap",
+    titulo_gpu_red_energia: "GPU · Red · Energía",
+    titulo_top_cpu: "Procesos con más CPU",
+    red: "Red",
+    red_sin_conexion: "sin conexión",
+    gpu_activa: "activa",
+    gpu_en_reposo: "en reposo",
+
+    // Columnas de procesos
+    col_pid: "PID",
+    col_nombre: "Nombre",
+    col_cpu: "CPU%",
+    col_mem: "MEM%",
+    col_res: "RES",
+    col_usuario: "Usuario",
 };
 
 pub const EN: Textos = Textos {
@@ -135,6 +233,55 @@ pub const EN: Textos = Textos {
     pestana_gpu: "GPU",
     pestana_red: "Network",
     pestana_procesos: "Processes",
+
+    // Barra superior
+    pausa: "PAUSED",
+
+    // Panel de imagen
+    foto_otra: "f: next",
+    foto_tus_fotos: "your photos:",
+    foto_no_se_pudo_abrir: "Could not open",
+    foto_dibujo_vacio: "empty drawing",
+
+    // Panel de sistema
+    titulo_sistema: "System",
+    equipo: "Host",
+    so: "OS",
+    kernel: "Kernel",
+    encendido: "Uptime",
+    escritorio: "Desktop",
+    shell: "Shell",
+    terminal: "Terminal",
+    cpu: "CPU",
+    gpu: "GPU",
+    memoria: "Memory",
+    disco_raiz: "Disk (/)",
+    bateria: "Battery",
+
+    // Estado de la batería
+    bateria_cargando: "Charging",
+    bateria_descargando: "Discharging",
+    bateria_completa: "Full",
+    bateria_sin_cargar: "Plugged in, not charging",
+    bateria_desconocido: "Unknown",
+
+    // Pestaña Resumen
+    uso: "Usage",
+    swap: "Swap",
+    titulo_gpu_red_energia: "GPU · Network · Power",
+    titulo_top_cpu: "Top processes by CPU",
+    red: "Network",
+    red_sin_conexion: "not connected",
+    gpu_activa: "active",
+    gpu_en_reposo: "suspended",
+
+    // Columnas de procesos
+    col_pid: "PID",
+    col_nombre: "Name",
+    col_cpu: "CPU%",
+    col_mem: "MEM%",
+    col_res: "RES",
+    col_usuario: "User",
 };
 
 #[cfg(test)]

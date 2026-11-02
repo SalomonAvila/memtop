@@ -104,7 +104,30 @@ pub struct Proceso {
 
 pub struct Bateria {
     pub porcentaje: u8,
-    pub estado: String,
+    pub estado: EstadoBateria,
+}
+
+/// Estado de carga, según `/sys/class/power_supply/*/status`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EstadoBateria {
+    Cargando,
+    Descargando,
+    Completa,
+    /// Conectada a la corriente pero sin cargar (p. ej. por un límite de carga).
+    SinCargar,
+    Desconocido,
+}
+
+impl EstadoBateria {
+    fn desde_sys(texto: &str) -> Self {
+        match texto {
+            "Charging" => Self::Cargando,
+            "Discharging" => Self::Descargando,
+            "Full" => Self::Completa,
+            "Not charging" => Self::SinCargar,
+            _ => Self::Desconocido,
+        }
+    }
 }
 
 pub struct Temperatura {
@@ -641,16 +664,9 @@ fn leer_bateria() -> Option<Bateria> {
         {
             return None;
         }
-        let estado = match leer(p.join("status"))?.as_str() {
-            "Charging" => "Cargando",
-            "Discharging" => "Descargando",
-            "Full" => "Completa",
-            "Not charging" => "Conectada, sin cargar",
-            _ => "Desconocido",
-        };
         Some(Bateria {
             porcentaje: leer(p.join("capacity"))?.parse().ok()?,
-            estado: estado.into(),
+            estado: EstadoBateria::desde_sys(&leer(p.join("status"))?),
         })
     })
 }
@@ -746,6 +762,20 @@ mod tests {
         assert_eq!(fmt_duracion(59), "0 min");
         assert_eq!(fmt_duracion(3 * 3600 + 5 * 60), "3 h 5 min");
         assert_eq!(fmt_duracion(2 * 86400 + 3600), "2 d 1 h 0 min");
+    }
+
+    #[test]
+    fn interpreta_el_estado_de_la_bateria() {
+        assert_eq!(
+            EstadoBateria::desde_sys("Charging"),
+            EstadoBateria::Cargando
+        );
+        assert_eq!(
+            EstadoBateria::desde_sys("Not charging"),
+            EstadoBateria::SinCargar
+        );
+        assert_eq!(EstadoBateria::desde_sys("Full"), EstadoBateria::Completa);
+        assert_eq!(EstadoBateria::desde_sys("???"), EstadoBateria::Desconocido);
     }
 
     #[test]

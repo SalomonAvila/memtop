@@ -149,7 +149,11 @@ impl Fotos {
                 self.titulo = format!(" {nombre}{pos} ");
                 self.actual = match abrir_imagen(p) {
                     Ok(img) => Contenido::Imagen(Box::new(self.picker.new_resize_protocol(img))),
-                    Err(e) => Contenido::Error(format!("No se pudo abrir {}:\n{e}", p.display())),
+                    Err(e) => Contenido::Error(format!(
+                        "{} {}:\n{e}",
+                        crate::i18n::t().foto_no_se_pudo_abrir,
+                        p.display()
+                    )),
                 };
             }
             Fuente::Pokemon => {
@@ -203,7 +207,7 @@ fn pokemon() -> (String, Contenido) {
     let contenido = match dibujo.as_bytes().into_text() {
         Ok(t) => match Sprite::desde_texto(&t) {
             Some(sp) => Contenido::Pixeles(sp),
-            None => Contenido::Error("dibujo vacío".into()),
+            None => Contenido::Error(crate::i18n::t().foto_dibujo_vacio.into()),
         },
         Err(e) => Contenido::Error(e.to_string()),
     };

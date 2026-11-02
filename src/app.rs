@@ -10,7 +10,7 @@ use serde::Deserialize;
 use crate::{
     config::Config,
     foto::Fotos,
-    gpu,
+    gpu, i18n,
     sistema::{Monitor, Proceso},
 };
 
@@ -38,15 +38,17 @@ impl Pestana {
         Pestana::Red,
         Pestana::Procesos,
     ];
+    /// Nombre de la pestaña en el idioma de la interfaz.
     pub fn titulo(self) -> &'static str {
+        let t = i18n::t();
         match self {
-            Pestana::Resumen => "Resumen",
-            Pestana::Cpu => "CPU",
-            Pestana::Ram => "RAM",
-            Pestana::Almacenamiento => "Almacenamiento",
-            Pestana::Gpu => "GPU",
-            Pestana::Red => "Red",
-            Pestana::Procesos => "Procesos",
+            Pestana::Resumen => t.pestana_resumen,
+            Pestana::Cpu => t.pestana_cpu,
+            Pestana::Ram => t.pestana_ram,
+            Pestana::Almacenamiento => t.pestana_almacenamiento,
+            Pestana::Gpu => t.pestana_gpu,
+            Pestana::Red => t.pestana_red,
+            Pestana::Procesos => t.pestana_procesos,
         }
     }
     fn indice(self) -> usize {

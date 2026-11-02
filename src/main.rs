@@ -5,6 +5,7 @@
 //! - [`gpu`] y [`pci`]: detección de GPUs y sus nombres comerciales.
 //! - [`foto`]: panel de imágenes y pixel art.
 //! - [`config`]: archivo de configuración.
+//! - [`i18n`]: idioma de la interfaz y textos traducidos.
 //! - [`app`]: estado de la interfaz y manejo de teclas.
 //! - [`ui`]: dibujo de cada pestaña con ratatui.
 
@@ -12,6 +13,7 @@ mod app;
 mod config;
 mod foto;
 mod gpu;
+mod i18n;
 mod pci;
 mod sistema;
 mod ui;

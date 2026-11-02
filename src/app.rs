@@ -1,3 +1,6 @@
+//! Estado de la interfaz: pestaña activa, lista de procesos (búsqueda, orden y
+//! selección), ventanas modales y traducción de teclas a acciones.
+
 use std::time::Instant;
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
@@ -9,6 +12,7 @@ use crate::{
     sistema::{Monitor, Proceso},
 };
 
+/// Pestañas del panel derecho, en el orden en que se muestran (teclas `1`–`7`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Pestana {
     Resumen,
@@ -46,6 +50,7 @@ impl Pestana {
     }
 }
 
+/// Columna por la que se ordena la pestaña Procesos.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OrdenProc {
     Cpu,
@@ -55,6 +60,7 @@ pub enum OrdenProc {
     Usuario,
 }
 
+/// Qué recibe las teclas: la vista normal, la búsqueda o una ventana modal.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Modo {
     Normal,
@@ -68,6 +74,7 @@ pub enum Modo {
 }
 
 pub struct App {
+    /// Datos del sistema; se refrescan en cada [`App::tick`].
     pub monitor: Monitor,
     pub fotos: Fotos,
     pub pestana: Pestana,

@@ -1,13 +1,21 @@
-//! GPUs leídas de /sys/bus/pci, sin despertar la gráfica dedicada.
+//! GPUs leídas de `/sys/bus/pci`, sin despertar la gráfica dedicada.
+//!
+//! - Nombre y fabricante: base PCI incluida en el binario ([`crate::pci`]).
+//! - AMD (`amdgpu`): uso y VRAM desde `/sys`.
+//! - Intel (`i915`/`xe`): frecuencia actual y máxima desde `/sys`.
+//! - NVIDIA (driver propietario): `nvidia-smi`, que se instala junto con el driver.
 //!
 //! En portátiles con gráfica híbrida la NVIDIA suele estar suspendida para ahorrar
-//! batería. Preguntarle a NVML/nvidia-smi la despierta, así que solo se consulta
-//! cuando ya está activa, y desde un hilo aparte para no congelar la interfaz.
+//! batería y consultarla la despierta. Por eso solo se pregunta mientras
+//! [`CONSULTAR_NVIDIA`] está activo (pestaña GPU visible), nunca si está suspendida,
+//! y desde un hilo aparte para no congelar la interfaz.
+
+use crate::pci;
 
 use std::{
     fs,
     path::{Path, PathBuf},
-    process::Command,
+    process::{Command, Stdio},
     sync::{
         Arc, Mutex,
         atomic::{AtomicBool, Ordering},
@@ -74,23 +82,26 @@ pub fn detectar() -> Vec<Gpu> {
                 return None;
             }
             let direccion = e.file_name().to_string_lossy().into_owned();
-            let vendor = leer(ruta.join("vendor")).unwrap_or_default();
+            let vendor = leer(ruta.join("vendor")).and_then(|v| pci::leer_hex(&v));
+            let device = leer(ruta.join("device")).and_then(|v| pci::leer_hex(&v));
             let driver = fs::read_link(ruta.join("driver"))
                 .ok()
                 .and_then(|p| p.file_name().map(|n| n.to_string_lossy().into_owned()));
-            let (fabricante, nombre) = nombre_lspci(&direccion).unwrap_or_else(|| {
-                let f = match vendor.as_str() {
-                    "0x10de" => "NVIDIA",
-                    "0x8086" => "Intel",
-                    "0x1002" => "AMD",
-                    _ => "Desconocido",
-                };
-                (
-                    f.to_string(),
-                    format!("GPU {}", leer(ruta.join("device")).unwrap_or_default()),
-                )
-            });
-            let nvidia = (vendor == "0x10de" && driver.as_deref() == Some("nvidia")).then(|| {
+            let fabricante = vendor
+                .and_then(pci::fabricante)
+                .unwrap_or_else(|| "Desconocido".into());
+            let nombre = vendor
+                .zip(device)
+                .and_then(|(v, d)| pci::dispositivo(v, d))
+                .unwrap_or_else(|| {
+                    format!(
+                        "GPU {:04x}:{:04x}",
+                        vendor.unwrap_or(0),
+                        device.unwrap_or(0)
+                    )
+                });
+            let es_nvidia = vendor == Some(0x10de) && driver.as_deref() == Some("nvidia");
+            let nvidia = es_nvidia.then(|| {
                 let datos = Arc::new(Mutex::new(None));
                 lanzar_hilo_nvidia(ruta.clone(), direccion.clone(), datos.clone());
                 datos
@@ -117,34 +128,6 @@ pub fn detectar() -> Vec<Gpu> {
     gpus.sort_by(|a, b| a.direccion.cmp(&b.direccion));
     actualizar(&mut gpus);
     gpus
-}
-
-/// `("NVIDIA", "GeForce RTX 3050 Mobile")` a partir de `lspci -mm`.
-fn nombre_lspci(direccion: &str) -> Option<(String, String)> {
-    let out = Command::new("lspci")
-        .args(["-mm", "-s", direccion])
-        .output()
-        .ok()?;
-    let txt = String::from_utf8_lossy(&out.stdout);
-    let campos: Vec<&str> = txt.split('"').filter(|s| !s.trim().is_empty()).collect();
-    // [dirección, clase, fabricante, dispositivo, ...]
-    let fab = campos
-        .get(2)?
-        .replace(" Corporation", "")
-        .replace(", Inc.", "")
-        .replace(" Inc.", "");
-    let fab = if fab.contains("AMD") || fab.contains("ATI") {
-        "AMD".into()
-    } else {
-        fab
-    };
-    let disp = campos.get(3)?;
-    // "GA107M [GeForce RTX 3050 Mobile]" → lo de dentro de los corchetes es el nombre comercial.
-    let nombre = match (disp.find('['), disp.rfind(']')) {
-        (Some(a), Some(b)) if b > a => disp[a + 1..b].to_string(),
-        _ => disp.to_string(),
-    };
-    Some((fab, nombre))
 }
 
 pub fn actualizar(gpus: &mut [Gpu]) {
@@ -223,6 +206,8 @@ fn lanzar_hilo_nvidia(ruta: PathBuf, direccion: String, datos: Arc<Mutex<Option<
 
 fn consultar_nvidia_smi(direccion: &str) -> Option<DatosNvidia> {
     let out = Command::new("nvidia-smi")
+        .stdin(Stdio::null())
+        .stderr(Stdio::null())
         .args([
             "-i",
             direccion,
@@ -234,7 +219,12 @@ fn consultar_nvidia_smi(direccion: &str) -> Option<DatosNvidia> {
     if !out.status.success() {
         return None;
     }
-    let txt = String::from_utf8_lossy(&out.stdout);
+    interpretar_nvidia_smi(&String::from_utf8_lossy(&out.stdout))
+}
+
+/// Interpreta una línea CSV de `nvidia-smi` (`"12, 301, 4096, 51, 9.87, 1170"`).
+/// Los campos no disponibles (`[N/A]`) quedan en `None`.
+fn interpretar_nvidia_smi(txt: &str) -> Option<DatosNvidia> {
     let c: Vec<&str> = txt.lines().next()?.split(',').map(str::trim).collect();
     let num = |i: usize| c.get(i).and_then(|v| v.parse::<f64>().ok());
     Some(DatosNvidia {
@@ -245,4 +235,27 @@ fn consultar_nvidia_smi(direccion: &str) -> Option<DatosNvidia> {
         consumo_w: num(4).map(|v| v as f32),
         frecuencia_mhz: num(5).map(|v| v as u32),
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn interpreta_la_salida_de_nvidia_smi() {
+        let d = interpretar_nvidia_smi("12, 301, 4096, 51, 9.87, 1170\n").unwrap();
+        assert_eq!(d.uso, Some(12.0));
+        assert_eq!(d.vram_usada, Some(301 * 1024 * 1024));
+        assert_eq!(d.vram_total, Some(4096 * 1024 * 1024));
+        assert_eq!(d.temperatura, Some(51.0));
+        assert_eq!(d.frecuencia_mhz, Some(1170));
+    }
+
+    #[test]
+    fn los_campos_no_disponibles_quedan_vacios() {
+        let d = interpretar_nvidia_smi("[N/A], 301, 4096, 51, [N/A], 1170").unwrap();
+        assert_eq!(d.uso, None);
+        assert_eq!(d.consumo_w, None);
+        assert_eq!(d.temperatura, Some(51.0));
+    }
 }

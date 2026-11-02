@@ -1,3 +1,10 @@
+//! Dibujo de la interfaz con ratatui.
+//!
+//! La pantalla se divide en: barra de pestañas (arriba), panel de imagen y resumen del
+//! sistema (izquierda), contenido de la pestaña activa (derecha) y atajos de teclado (abajo).
+//! Todas las funciones son de solo lectura sobre [`App`], salvo el estado de selección
+//! de las tablas y el protocolo de imagen, que ratatui necesita mutables.
+
 use std::collections::VecDeque;
 
 use ratatui::{
@@ -250,25 +257,17 @@ fn texto_centrado(f: &mut Frame, inner: Rect, texto: String, color: Color) {
 }
 
 fn dibujar_foto(f: &mut Frame, app: &mut App, area: Rect) {
-    let mut block = bloque(app.fotos.titulo.clone());
-    if app.fotos.cantidad() > 0 {
-        block = block.title_bottom(
-            Line::styled(" f: otra ", Style::new().fg(TENUE)).alignment(Alignment::Right),
-        );
-    }
+    let pie = if app.fotos.cantidad() > 0 {
+        " f: otra ".to_string()
+    } else {
+        format!(" tus fotos: {} ", crate::foto::carpeta_mostrada())
+    };
+    let block = bloque(app.fotos.titulo.clone())
+        .title_bottom(Line::styled(pie, Style::new().fg(TENUE)).alignment(Alignment::Right));
     let inner = block.inner(area);
     f.render_widget(block, area);
 
     match &mut app.fotos.actual {
-        Contenido::Vacio => texto_centrado(
-            f,
-            inner,
-            format!(
-                "Sin fotos.\n\nPon imágenes en\n{}\no usa --foto RUTA",
-                crate::foto::carpeta_por_defecto().display()
-            ),
-            TENUE,
-        ),
         Contenido::Error(e) => texto_centrado(f, inner, e.clone(), Color::Red),
         Contenido::Pixeles(sp) => dibujar_sprite(f, sp, inner),
         Contenido::Imagen(proto) => {
@@ -1007,7 +1006,7 @@ fn tab_red(f: &mut Frame, app: &mut App, area: Rect) {
     f.render_widget(t, tabla);
 }
 
-/// IPv4 completas y el resto resumido: "192.168.1.5/24 +3 IPv6".
+/// IPv4 completas y el resto resumido: "192.0.2.10/24 +3 v6".
 fn resumen_ips(ips: &[String]) -> String {
     if ips.is_empty() {
         return "—".into();

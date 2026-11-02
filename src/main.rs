@@ -1,11 +1,22 @@
+//! memtop: información del sistema y monitor de recursos en una sola pantalla de terminal.
+//!
+//! Estructura:
+//! - [`sistema`]: lectura de CPU, memoria, discos, red, procesos, sensores y batería.
+//! - [`gpu`] y [`pci`]: detección de GPUs y sus nombres comerciales.
+//! - [`foto`]: panel de imágenes y pixel art.
+//! - [`app`]: estado de la interfaz y manejo de teclas.
+//! - [`ui`]: dibujo de cada pestaña con ratatui.
+
 mod app;
 mod foto;
 mod gpu;
+mod pci;
 mod sistema;
 mod ui;
 
 use std::{
     env,
+    io::{IsTerminal, stdout},
     path::PathBuf,
     process::ExitCode,
     time::{Duration, Instant},
@@ -18,21 +29,27 @@ use ratatui_image::picker::{Picker, ProtocolType};
 
 use app::App;
 
+const VERSION: &str = env!("CARGO_PKG_VERSION");
+
 const AYUDA: &str = "\
-memtop — tu fastfetch + htop en una sola pantalla
+memtop — información del sistema y monitor de recursos en la terminal
 
 USO:
-    memtop [opciones]
+    memtop [OPCIONES]
 
 OPCIONES:
-    --foto RUTA     Imagen o carpeta de imágenes para el panel izquierdo
-                    (por defecto: ~/.config/memtop/fotos)
-    --sin-pokemon   No añadir un Pokémon de pokemon-colorscripts
-    --halfblocks    Dibujar las fotos con caracteres ▀ en vez de sixel/kitty
-    -i, --intervalo SEG   Segundos entre actualizaciones (por defecto 1)
-    -h, --help      Mostrar esta ayuda
+    --foto RUTA             Imagen o carpeta de imágenes para el panel izquierdo
+                            (por defecto: $XDG_CONFIG_HOME/memtop/fotos o ~/.config/memtop/fotos)
+    --sin-pokemon           No mostrar Pokémon aunque pokemon-colorscripts esté instalado
+    --halfblocks            Dibujar las imágenes con caracteres ▀ aunque la terminal admita gráficos
+    -i, --intervalo SEG     Segundos entre actualizaciones (por defecto 1, mínimo 0.2)
+    -V, --version           Mostrar la versión
+    -h, --help              Mostrar esta ayuda
+
+Dentro de memtop pulsa ? para ver todas las teclas.
 ";
 
+#[derive(Debug, PartialEq)]
 struct Opciones {
     foto: Option<PathBuf>,
     pokemon: bool,
@@ -40,17 +57,31 @@ struct Opciones {
     intervalo: Duration,
 }
 
-fn leer_opciones() -> Result<Option<Opciones>, String> {
-    let mut o = Opciones {
-        foto: None,
-        pokemon: true,
-        halfblocks: false,
-        intervalo: Duration::from_secs(1),
-    };
-    let mut args = env::args().skip(1);
+impl Default for Opciones {
+    fn default() -> Self {
+        Self {
+            foto: None,
+            pokemon: true,
+            halfblocks: false,
+            intervalo: Duration::from_secs(1),
+        }
+    }
+}
+
+#[derive(Debug, PartialEq)]
+enum Accion {
+    Ejecutar(Opciones),
+    Ayuda,
+    Version,
+}
+
+fn leer_opciones(args: impl IntoIterator<Item = String>) -> Result<Accion, String> {
+    let mut o = Opciones::default();
+    let mut args = args.into_iter();
     while let Some(a) = args.next() {
         match a.as_str() {
-            "-h" | "--help" => return Ok(None),
+            "-h" | "--help" => return Ok(Accion::Ayuda),
+            "-V" | "--version" => return Ok(Accion::Version),
             "--foto" => {
                 o.foto = Some(PathBuf::from(
                     args.next().ok_or("--foto necesita una ruta")?,
@@ -62,34 +93,55 @@ fn leer_opciones() -> Result<Option<Opciones>, String> {
                 let s: f64 = args
                     .next()
                     .and_then(|v| v.replace(',', ".").parse().ok())
-                    .filter(|v: &f64| *v >= 0.2)
+                    .filter(|v: &f64| v.is_finite() && *v >= 0.2)
                     .ok_or("--intervalo necesita un número de segundos (mínimo 0.2)")?;
                 o.intervalo = Duration::from_secs_f64(s);
             }
             otro => return Err(format!("opción desconocida: {otro}")),
         }
     }
-    Ok(Some(o))
+    Ok(Accion::Ejecutar(o))
 }
 
 fn main() -> ExitCode {
-    let opciones = match leer_opciones() {
-        Ok(Some(o)) => o,
-        Ok(None) => {
+    let opciones = match leer_opciones(env::args().skip(1)) {
+        Ok(Accion::Ejecutar(o)) => o,
+        Ok(Accion::Ayuda) => {
             print!("{AYUDA}");
             return ExitCode::SUCCESS;
         }
+        Ok(Accion::Version) => {
+            println!("memtop {VERSION}");
+            return ExitCode::SUCCESS;
+        }
         Err(e) => {
-            eprintln!("error: {e}\n\n{AYUDA}");
-            return ExitCode::FAILURE;
+            eprintln!("memtop: {e}\nPrueba `memtop --help`.");
+            return ExitCode::from(2);
         }
     };
 
-    // Primera lectura antes de entrar a la TUI (el uso de CPU necesita dos muestras).
-    let monitor = sistema::Monitor::new();
+    if !stdout().is_terminal() {
+        eprintln!("memtop: necesita ejecutarse en una terminal interactiva.");
+        return ExitCode::FAILURE;
+    }
 
+    match iniciar(opciones) {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(e) => {
+            eprintln!("memtop: {e:#}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
+fn iniciar(opciones: Opciones) -> Result<()> {
+    // Primera lectura antes de entrar a la interfaz: el uso de CPU necesita dos muestras.
+    let monitor = sistema::Monitor::new()?;
+
+    // `ratatui::init` activa el modo raw y la pantalla alternativa, e instala un hook
+    // que restaura la terminal si el programa entra en pánico.
     let mut terminal = ratatui::init();
-    // Preguntar a la terminal qué protocolo de imágenes soporta (tras entrar en modo raw).
+    // La consulta del protocolo de imágenes necesita el modo raw ya activo.
     let picker = if opciones.halfblocks {
         Picker::halfblocks()
     } else {
@@ -98,19 +150,13 @@ fn main() -> ExitCode {
     let fotos = foto::Fotos::new(picker, opciones.foto, opciones.pokemon);
     let resultado = ejecutar(&mut terminal, App::new(monitor, fotos), opciones.intervalo);
     ratatui::restore();
-
-    match resultado {
-        Ok(()) => ExitCode::SUCCESS,
-        Err(e) => {
-            eprintln!("error: {e:#}");
-            ExitCode::FAILURE
-        }
-    }
+    resultado
 }
 
+/// Bucle principal: dibuja, espera teclas hasta el siguiente tick y actualiza los datos.
 fn ejecutar(terminal: &mut DefaultTerminal, mut app: App, intervalo: Duration) -> Result<()> {
-    // Sixel/iTerm2 pintan píxeles encima de las celdas: al cambiar de foto hay
-    // que limpiar la pantalla o quedan restos de la anterior.
+    // Sixel e iTerm2 pintan píxeles encima de las celdas: al cambiar de imagen o de
+    // tamaño hay que limpiar la pantalla o quedan restos de la anterior.
     let limpiar = matches!(
         app.fotos.picker.protocol_type(),
         ProtocolType::Sixel | ProtocolType::Iterm2
@@ -139,4 +185,50 @@ fn ejecutar(terminal: &mut DefaultTerminal, mut app: App, intervalo: Duration) -
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn leer(args: &[&str]) -> Result<Accion, String> {
+        leer_opciones(args.iter().map(|s| s.to_string()))
+    }
+
+    #[test]
+    fn sin_argumentos_usa_los_valores_por_defecto() {
+        assert_eq!(leer(&[]), Ok(Accion::Ejecutar(Opciones::default())));
+    }
+
+    #[test]
+    fn interpreta_todas_las_opciones() {
+        let Ok(Accion::Ejecutar(o)) = leer(&[
+            "--foto",
+            "/tmp/a.png",
+            "--sin-pokemon",
+            "--halfblocks",
+            "-i",
+            "2,5",
+        ]) else {
+            panic!("debería ejecutar");
+        };
+        assert_eq!(o.foto, Some(PathBuf::from("/tmp/a.png")));
+        assert!(!o.pokemon);
+        assert!(o.halfblocks);
+        assert_eq!(o.intervalo, Duration::from_millis(2500));
+    }
+
+    #[test]
+    fn ayuda_y_version() {
+        assert_eq!(leer(&["--help"]), Ok(Accion::Ayuda));
+        assert_eq!(leer(&["-V"]), Ok(Accion::Version));
+    }
+
+    #[test]
+    fn rechaza_valores_invalidos() {
+        assert!(leer(&["--foto"]).is_err());
+        assert!(leer(&["-i", "0.1"]).is_err());
+        assert!(leer(&["-i", "nan"]).is_err());
+        assert!(leer(&["--desconocida"]).is_err());
+    }
 }

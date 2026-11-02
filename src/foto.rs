@@ -1,10 +1,18 @@
-//! Panel de la izquierda: tus fotos (de ~/.config/memtop/fotos o `--foto`)
-//! y, si tienes `pokemon-colorscripts`, un Pokémon al azar como en tu fastfetch.
+//! Panel de la izquierda.
+//!
+//! Fuentes, en este orden:
+//! 1. Imágenes de `--foto RUTA` o, si no se indica, de `~/.config/memtop/fotos/`.
+//! 2. Un Pokémon al azar si `pokemon-colorscripts` está instalado (opcional).
+//! 3. Si no hay ninguna de las dos, el logo de memtop incluido en el binario.
+//!
+//! Las imágenes se muestran con el mejor protocolo que admita la terminal (kitty, sixel,
+//! iTerm2 o medios bloques). El pixel art (Pokémon y logo) se convierte en un [`Sprite`]
+//! que se reescala al tamaño exacto del panel.
 
 use std::{
     env, fs,
     path::{Path, PathBuf},
-    process::Command,
+    process::{Command, Stdio},
 };
 
 use ansi_to_tui::IntoText;
@@ -12,7 +20,11 @@ use image::ImageReader;
 use ratatui::{style::Color, text::Text};
 use ratatui_image::{picker::Picker, protocol::StatefulProtocol};
 
-const EXT_IMAGEN: &[&str] = &["png", "jpg", "jpeg", "webp", "gif", "bmp", "tiff", "tif"];
+/// Extensiones de imagen que se cargan desde la carpeta de fotos.
+pub const EXT_IMAGEN: &[&str] = &["png", "jpg", "jpeg", "webp", "gif", "bmp", "tiff", "tif"];
+
+/// Lado máximo (px) al que se reduce cada imagen al cargarla, para que redimensionar
+/// en cada cambio de tamaño de la ventana sea rápido aunque el original sea enorme.
 const MAX_PX: u32 = 1400;
 
 enum Fuente {
@@ -25,7 +37,6 @@ pub enum Contenido {
     /// Pixel art (p. ej. un Pokémon) que se reescala al panel.
     Pixeles(Sprite),
     Error(String),
-    Vacio,
 }
 
 pub struct Fotos {
@@ -43,6 +54,17 @@ pub fn carpeta_por_defecto() -> PathBuf {
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from(env::var_os("HOME").unwrap_or_default()).join(".config"));
     base.join("memtop/fotos")
+}
+
+/// La carpeta de fotos para mostrarla al usuario, con `~` en lugar de `$HOME`.
+pub fn carpeta_mostrada() -> String {
+    let ruta = carpeta_por_defecto().display().to_string();
+    match env::var("HOME") {
+        Ok(home) if !home.is_empty() && ruta.starts_with(&home) => {
+            format!("~{}", &ruta[home.len()..])
+        }
+        _ => ruta,
+    }
 }
 
 fn es_imagen(p: &Path) -> bool {
@@ -80,8 +102,8 @@ impl Fotos {
         let mut f = Self {
             fuentes,
             idx: 0,
-            actual: Contenido::Vacio,
-            titulo: " Foto ".into(),
+            actual: Contenido::Pixeles(Sprite::logo()),
+            titulo: " memtop ".into(),
             picker,
             version: 0,
         };
@@ -116,8 +138,8 @@ impl Fotos {
             String::new()
         };
         let Some(fuente) = self.fuentes.get(self.idx) else {
-            self.actual = Contenido::Vacio;
-            self.titulo = " Foto ".into();
+            self.actual = Contenido::Pixeles(Sprite::logo());
+            self.titulo = " memtop ".into();
             return;
         };
         match fuente {
@@ -156,7 +178,11 @@ fn abrir_imagen(p: &Path) -> Result<image::DynamicImage, String> {
 }
 
 fn pokemon() -> (String, Contenido) {
-    let out = match Command::new("pokemon-colorscripts").arg("-r").output() {
+    let out = match Command::new("pokemon-colorscripts")
+        .arg("-r")
+        .stdin(Stdio::null())
+        .output()
+    {
         Ok(o) if o.status.success() => o.stdout,
         Ok(o) => {
             return (
@@ -270,5 +296,128 @@ impl Sprite {
 
     pub fn pixel(&self, x: usize, y: usize) -> Option<Color> {
         self.px.get(y * self.ancho + x).copied().flatten()
+    }
+
+    /// Logo de memtop: un monitor con una gráfica de línea y barras.
+    pub fn logo() -> Self {
+        const MARCO: Color = Color::Rgb(120, 132, 156);
+        const PANTALLA: Color = Color::Rgb(18, 22, 34);
+        const LINEA: Color = Color::Rgb(90, 220, 150);
+        const BARRA: Color = Color::Rgb(80, 196, 232);
+        const PIE: Color = Color::Rgb(90, 100, 120);
+        const BOTONES: [Color; 3] = [
+            Color::Rgb(240, 90, 90),
+            Color::Rgb(240, 200, 80),
+            Color::Rgb(90, 220, 150),
+        ];
+        // Alturas (en px desde la base de la gráfica) de la línea y de las barras.
+        const CURVA: [usize; 22] = [
+            1, 2, 2, 3, 5, 6, 5, 4, 4, 5, 7, 8, 7, 6, 5, 6, 8, 9, 9, 8, 7, 8,
+        ];
+        const BARRAS: [usize; 11] = [2, 3, 2, 4, 3, 4, 2, 3, 4, 3, 2];
+
+        let (ancho, alto) = (28, 23);
+        let mut sp = Self {
+            ancho,
+            alto,
+            px: vec![None; ancho * alto],
+        };
+        let mut poner = |x: usize, y: usize, c: Color| sp.px[y * ancho + x] = Some(c);
+
+        // Monitor: marco y pantalla.
+        for y in 0..18 {
+            for x in 0..ancho {
+                let borde = y == 0 || y == 17 || x == 0 || x == ancho - 1;
+                poner(x, y, if borde { MARCO } else { PANTALLA });
+            }
+        }
+        for (i, c) in BOTONES.iter().enumerate() {
+            poner(2 + i * 2, 2, *c);
+        }
+        // Gráfica de línea (base en y = 13).
+        for (i, h) in CURVA.iter().enumerate() {
+            poner(3 + i, 13 - h, LINEA);
+        }
+        // Barras (base en y = 16).
+        for (i, h) in BARRAS.iter().enumerate() {
+            for dy in 0..*h {
+                poner(3 + i * 2, 16 - dy, BARRA);
+            }
+        }
+        // Pie del monitor.
+        for y in 18..21 {
+            for x in 12..16 {
+                poner(x, y, PIE);
+            }
+        }
+        for x in 7..21 {
+            poner(x, 21, PIE);
+            poner(x, 22, PIE);
+        }
+        sp
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ratatui::style::Style;
+    use ratatui::text::{Line, Span};
+
+    fn rojo() -> Color {
+        Color::Rgb(255, 0, 0)
+    }
+
+    #[test]
+    fn convierte_medios_bloques_en_pixeles_y_recorta_bordes() {
+        // "  ▀ " con fg rojo: un píxel arriba, el resto transparente.
+        let t = Text::from(vec![
+            Line::from("    "),
+            Line::from(vec![
+                Span::raw("  "),
+                Span::styled("▀", Style::new().fg(rojo())),
+                Span::raw(" "),
+            ]),
+        ]);
+        let sp = Sprite::desde_texto(&t).unwrap();
+        assert_eq!((sp.ancho, sp.alto), (1, 1));
+        assert_eq!(sp.pixel(0, 0), Some(rojo()));
+    }
+
+    #[test]
+    fn un_dibujo_vacio_no_produce_sprite() {
+        assert!(Sprite::desde_texto(&Text::from("   ")).is_none());
+    }
+
+    #[test]
+    fn la_escala_prefiere_factores_enteros_si_llenan_el_panel() {
+        let sp = Sprite {
+            ancho: 10,
+            alto: 10,
+            px: vec![Some(rojo()); 100],
+        };
+        // Cabe ×3.0 exacto en 30 columnas × 15 filas (30 px de alto).
+        assert_eq!(sp.escala(30, 15), 3.0);
+        // ×2.2 posible: el entero ×2 llena el 91 %, así que se usa ×2.
+        assert_eq!(sp.escala(22, 11), 2.0);
+        // ×1.6 posible: ×1 solo llenaría el 62 %, así que se usa la escala exacta.
+        assert_eq!(sp.escala(16, 8), 1.6);
+        // Más pequeño que el sprite: se reduce.
+        assert_eq!(sp.escala(5, 10), 0.5);
+    }
+
+    #[test]
+    fn el_logo_tiene_el_tamano_esperado() {
+        let logo = Sprite::logo();
+        assert_eq!((logo.ancho, logo.alto), (28, 23));
+        assert_eq!(logo.px.len(), 28 * 23);
+    }
+
+    #[test]
+    fn reconoce_extensiones_de_imagen() {
+        assert!(es_imagen(Path::new("foto.JPG")));
+        assert!(es_imagen(Path::new("a/b.webp")));
+        assert!(!es_imagen(Path::new("notas.txt")));
+        assert!(!es_imagen(Path::new("sin_extension")));
     }
 }

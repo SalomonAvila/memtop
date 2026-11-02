@@ -1,5 +1,11 @@
-//! Lectura de la información de este equipo: lo estático (modelo, SO, CPU…)
-//! se lee una vez; lo dinámico (uso de CPU, RAM, discos, red, procesos) en cada tick.
+//! Lectura de la información del equipo.
+//!
+//! Lo estático (modelo, SO, CPU…) se lee una vez al arrancar; lo dinámico (uso de CPU,
+//! memoria, discos, red, procesos, sensores) en cada llamada a [`Monitor::actualizar`].
+//!
+//! Fuentes: el crate `sysinfo` para CPU, procesos, red, particiones y sensores, y lectura
+//! directa de `/proc/meminfo`, `/sys/block`, `/sys/class/power_supply`, `/sys/class/dmi/id`
+//! y `/etc/os-release` para el resto. No necesita privilegios de root.
 
 use std::{
     collections::{HashMap, VecDeque},
@@ -8,6 +14,7 @@ use std::{
     time::Instant,
 };
 
+use anyhow::{Context, Result};
 use sysinfo::{Components, Disks, Networks, Pid, ProcessesToUpdate, System, Users};
 
 use crate::gpu::{self, Gpu};
@@ -137,23 +144,21 @@ pub struct Monitor {
 }
 
 impl Monitor {
-    pub fn new() -> Self {
-        let mut sys = System::new_all().unwrap_or_else(|_| System::new().expect("sysinfo"));
+    /// Hace la primera lectura completa. Solo falla si el sistema no expone `/proc`.
+    pub fn new() -> Result<Self> {
+        let mut sys = System::new_all().context("no se pudo leer la información del sistema")?;
         sys.refresh_all();
         let info = leer_info(&sys);
         let nombres_usuario = Users::new_with_refreshed_list()
-            .unwrap_or_else(|_| Users::new().expect("sysinfo"))
-            .iter()
-            .map(|u| (**u.id(), u.name().to_string()))
-            .collect();
+            .map(|u| u.iter().map(|u| (**u.id(), u.name().to_string())).collect())
+            .unwrap_or_default();
 
         let mut m = Self {
             discos_sys: Disks::new_with_refreshed_list()
-                .unwrap_or_else(|_| Disks::new().expect("sysinfo")),
-            redes: Networks::new_with_refreshed_list()
-                .unwrap_or_else(|_| Networks::new().expect("sysinfo")),
+                .context("no se pudieron leer los discos")?,
+            redes: Networks::new_with_refreshed_list().context("no se pudo leer la red")?,
             componentes: Components::new_with_refreshed_list()
-                .unwrap_or_else(|_| Components::new().expect("sysinfo")),
+                .context("no se pudieron leer los sensores")?,
             nombres_usuario,
             ultimo: Instant::now(),
             info,
@@ -177,7 +182,7 @@ impl Monitor {
             hist_tx: VecDeque::with_capacity(HISTORIAL),
         };
         m.actualizar();
-        m
+        Ok(m)
     }
 
     pub fn actualizar(&mut self) {
@@ -370,24 +375,7 @@ fn leer(p: impl AsRef<Path>) -> Option<String> {
 
 fn leer_info(sys: &System) -> Info {
     let modelo = leer("/sys/class/dmi/id/product_name")
-        .map(|p| {
-            // "ASUS TUF Dash F15 FX517ZC_FX517ZC" → "ASUS TUF Dash F15 FX517ZC"
-            let p = match p.rsplit_once(' ') {
-                Some((a, b)) => match b.split_once('_') {
-                    Some((x, y)) if x == y => format!("{a} {x}"),
-                    _ => p.clone(),
-                },
-                None => p,
-            };
-            // Añadir la marca solo si el producto no la menciona ya
-            // ("ASUS TUF…" ya dice ASUS aunque el fabricante sea "ASUSTeK COMPUTER INC.").
-            let primera = p.split(' ').next().unwrap_or("").to_lowercase();
-            match leer("/sys/class/dmi/id/sys_vendor") {
-                Some(v) if !v.to_lowercase().starts_with(&primera) => format!("{v} {p}"),
-                _ => p,
-            }
-        })
-        .filter(|m| !m.contains("To Be Filled") && !m.contains("System Product Name"));
+        .and_then(|p| limpiar_modelo(leer("/sys/class/dmi/id/sys_vendor").as_deref(), &p));
     let so = fs::read_to_string("/etc/os-release")
         .ok()
         .and_then(|t| {
@@ -401,16 +389,29 @@ fn leer_info(sys: &System) -> Info {
     let shell = env::var("SHELL")
         .ok()
         .and_then(|s| s.rsplit('/').next().map(str::to_string));
-    let escritorio =
-        env::var("XDG_CURRENT_DESKTOP")
-            .ok()
-            .map(|d| match env::var("XDG_SESSION_TYPE") {
-                Ok(t) => format!("{d} ({t})"),
-                Err(_) => d,
-            });
+    let escritorio = env::var("XDG_CURRENT_DESKTOP")
+        .ok()
+        // Ubuntu usa "ubuntu:GNOME", Pop!_OS "pop:GNOME": quedarse con el escritorio real.
+        .map(|d| d.rsplit(':').next().unwrap_or(&d).to_string())
+        .filter(|d| !d.is_empty())
+        .map(|d| match env::var("XDG_SESSION_TYPE") {
+            Ok(t) => format!("{d} ({t})"),
+            Err(_) => d,
+        });
 
     Info {
-        usuario: env::var("USER").unwrap_or_else(|_| "?".into()),
+        usuario: env::var("USER")
+            .ok()
+            .or_else(|| {
+                // Sin $USER (cron, contenedores…): buscar el nombre por el UID del proceso.
+                let pid = sysinfo::get_current_pid().ok()?;
+                let uid = sys.process(pid)?.user_id()?.clone();
+                Users::new_with_refreshed_list()
+                    .ok()?
+                    .get_user_by_id(&uid)
+                    .map(|u| u.name().to_string())
+            })
+            .unwrap_or_else(|| "?".into()),
         host: System::host_name().unwrap_or_else(|_| "?".into()),
         modelo,
         so,
@@ -429,16 +430,66 @@ fn leer_info(sys: &System) -> Info {
     }
 }
 
-/// `"12th Gen Intel(R) Core(TM) i5-12450H"` → `"Intel Core i5-12450H"`.
+/// Nombre del equipo a partir de DMI, sin repeticiones ni textos de relleno.
+///
+/// - `("Fabricante S.A.", "Modelo X1 AB12_AB12")` → `"Fabricante S.A. Modelo X1 AB12"`
+/// - `("ACME COMPUTER INC.", "ACME Book 14")` → `"ACME Book 14"` (el producto ya dice la marca)
+fn limpiar_modelo(fabricante: Option<&str>, producto: &str) -> Option<String> {
+    const RELLENO: &[&str] = &[
+        "To Be Filled",
+        "To be filled",
+        "System Product Name",
+        "Default string",
+        "Not Applicable",
+    ];
+    let producto = producto.trim();
+    if producto.is_empty() || RELLENO.iter().any(|r| producto.contains(r)) {
+        return None;
+    }
+    // Algunos fabricantes repiten el código de modelo: "... AB12_AB12".
+    let producto = match producto.rsplit_once(' ') {
+        Some((inicio, codigo)) => match codigo.split_once('_') {
+            Some((a, b)) if a == b => format!("{inicio} {a}"),
+            _ => producto.to_string(),
+        },
+        None => producto.to_string(),
+    };
+    let primera = producto.split(' ').next().unwrap_or("").to_lowercase();
+    match fabricante.map(str::trim) {
+        Some(f)
+            if !f.is_empty()
+                && !RELLENO.iter().any(|r| f.contains(r))
+                && !f.to_lowercase().starts_with(&primera) =>
+        {
+            Some(format!("{f} {producto}"))
+        }
+        _ => Some(producto),
+    }
+}
+
+/// Nombre de CPU sin marcas registradas ni texto sobrante.
+///
+/// - `"11th Gen Intel(R) Core(TM) i7-1165G7 @ 2.80GHz"` → `"Intel Core i7-1165G7"`
+/// - `"AMD Ryzen 7 5800X 8-Core Processor"` → `"AMD Ryzen 7 5800X"`
 fn limpiar_cpu(s: &str) -> String {
     let s = s.replace("(R)", "").replace("(TM)", "").replace("(tm)", "");
-    let s = s.split(" @ ").next().unwrap_or(&s).to_string();
-    let s = s
-        .trim_start_matches(|c: char| c.is_ascii_digit())
-        .trim_start_matches("th Gen ")
-        .to_string();
-    let s = s.replace(" CPU", "").replace(" Processor", "");
-    s.split_whitespace().collect::<Vec<_>>().join(" ")
+    // Lo que va tras " @ " (frecuencia) o " with "/" w/ " (gráfica integrada) sobra.
+    let s = [" @ ", " with ", " w/ "]
+        .iter()
+        .fold(s.as_str(), |acc, sep| acc.split(sep).next().unwrap_or(acc));
+    let palabras: Vec<&str> = s.split_whitespace().collect();
+    // "12th Gen", "2nd Gen", "3rd Gen"… al principio.
+    let inicio = match palabras.as_slice() {
+        [n, "Gen", ..] if n.chars().next().is_some_and(|c| c.is_ascii_digit()) => 2,
+        _ => 0,
+    };
+    palabras[inicio..]
+        .iter()
+        .filter(|p| !matches!(**p, "CPU" | "Processor"))
+        .filter(|p| !p.ends_with("-Core"))
+        .copied()
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 /// Sube por los procesos padre hasta encontrar algo que no sea un shell.
@@ -464,9 +515,12 @@ fn detectar_terminal(sys: &System) -> Option<String> {
         let p = sys.process(pid)?;
         let nombre = p.name().to_string_lossy().into_owned();
         if !NO.contains(&nombre.as_str()) && pid != sysinfo::get_current_pid().ok()? {
+            // "tmux: server" → "tmux", "gnome-terminal-server" → "gnome-terminal".
             let limpio = nombre
+                .split(':')
+                .next()
+                .unwrap_or(&nombre)
                 .trim_end_matches("-server")
-                .trim_end_matches("-terminal-server")
                 .to_string();
             return Some(limpio);
         }
@@ -628,5 +682,85 @@ pub fn fmt_duracion(s: u64) -> String {
         (0, 0) => format!("{m} min"),
         (0, _) => format!("{h} h {m} min"),
         _ => format!("{d} d {h} h {m} min"),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn limpia_nombres_de_cpu() {
+        assert_eq!(
+            limpiar_cpu("11th Gen Intel(R) Core(TM) i7-1165G7 @ 2.80GHz"),
+            "Intel Core i7-1165G7"
+        );
+        assert_eq!(
+            limpiar_cpu("Intel(R) Core(TM) i5-2500K CPU @ 3.30GHz"),
+            "Intel Core i5-2500K"
+        );
+        assert_eq!(
+            limpiar_cpu("AMD Ryzen 7 5800X 8-Core Processor"),
+            "AMD Ryzen 7 5800X"
+        );
+        assert_eq!(
+            limpiar_cpu("AMD Ryzen 5 5600G with Radeon Graphics"),
+            "AMD Ryzen 5 5600G"
+        );
+        assert_eq!(
+            limpiar_cpu("AMD Ryzen 7 PRO 7840U w/ Radeon 780M Graphics"),
+            "AMD Ryzen 7 PRO 7840U"
+        );
+        assert_eq!(limpiar_cpu("Apple M2"), "Apple M2");
+    }
+
+    #[test]
+    fn limpia_nombres_de_equipo() {
+        assert_eq!(
+            limpiar_modelo(Some("Fabricante S.A."), "Modelo X1 AB12_AB12").as_deref(),
+            Some("Fabricante S.A. Modelo X1 AB12")
+        );
+        assert_eq!(
+            limpiar_modelo(Some("ACME COMPUTER INC."), "ACME Book 14").as_deref(),
+            Some("ACME Book 14")
+        );
+        assert_eq!(
+            limpiar_modelo(Some("Default string"), "Torre 5").as_deref(),
+            Some("Torre 5")
+        );
+        assert_eq!(limpiar_modelo(Some("ACME"), "System Product Name"), None);
+        assert_eq!(limpiar_modelo(None, "  "), None);
+    }
+
+    #[test]
+    fn formatea_bytes() {
+        assert_eq!(fmt_bytes(512), "512 B");
+        assert_eq!(fmt_bytes(1536), "1.5 KiB");
+        assert_eq!(fmt_bytes(250 * 1024 * 1024), "250 MiB");
+        assert_eq!(fmt_bytes(31 * 1024 * 1024 * 1024), "31.0 GiB");
+        assert_eq!(fmt_tasa(2048.0), "2.0 KiB/s");
+    }
+
+    #[test]
+    fn formatea_duraciones() {
+        assert_eq!(fmt_duracion(59), "0 min");
+        assert_eq!(fmt_duracion(3 * 3600 + 5 * 60), "3 h 5 min");
+        assert_eq!(fmt_duracion(2 * 86400 + 3600), "2 d 1 h 0 min");
+    }
+
+    #[test]
+    fn la_memoria_usada_no_puede_ser_negativa() {
+        let m = Memoria {
+            total: 100,
+            disponible: 150,
+            libre: 0,
+            buffers: 0,
+            cache: 0,
+            compartida: 0,
+            swap_total: 0,
+            swap_libre: 10,
+        };
+        assert_eq!(m.usada(), 0);
+        assert_eq!(m.swap_usada(), 0);
     }
 }

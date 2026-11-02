@@ -1,167 +1,277 @@
 # memtop
 
-Tu **fastfetch + htop** en una sola pantalla de terminal, hecho en Rust con
-[ratatui](https://ratatui.rs), la misma librería de TUI que usa llmfit.
+Información del sistema y monitor de recursos en una sola pantalla de terminal, para Linux.
+
+memtop combina dos cosas que normalmente se usan por separado: un resumen del equipo
+(modelo, sistema operativo, CPU, GPU, memoria…) y un monitor en vivo de CPU, memoria,
+discos, GPU, red y procesos. Está escrito en Rust con [ratatui](https://ratatui.rs) y se
+distribuye como un único binario estático, sin dependencias del sistema.
+
+## Contenido
+
+- [Pantalla](#pantalla)
+- [Instalación](#instalación)
+- [Uso](#uso)
+- [Teclas](#teclas)
+- [Panel de imagen](#panel-de-imagen)
+- [Datos y permisos](#datos-y-permisos)
+- [Desarrollo](#desarrollo)
+- [Licencia](#licencia)
+
+## Pantalla
 
 ```
-╭ memtop ─────────────────────────────────────────────────────────── usuario@equipo ╮
-│ 1 Resumen │ 2 CPU │ 3 RAM │ 4 Almacenamiento │ 5 GPU │ 6 Red │ 7 Procesos         │
-╰───────────────────────────────────────────────────────────────────────────────────╯
-╭ Persian ───────────────╮╭ CPU ────────────────────────────────────────────────────╮
-│      ▄▀▀▄      ▄▄▀▀▀▄▄ ││Uso  ▕█████░░░░░░░░░░░░░░░░░░░▏  21.6%  86°C  4.10 GHz   │
-│  ▄▀▀▄▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▄ ││▃▁▂▅▃▂▁▁▂▃▄▂▁                                            │
-│   ▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀  │╰─────────────────────────────────────────────────────────╯
-╰─────────────── f: otra ╯╭ Memoria ────────────────────────────────────────────────╮
-╭ Sistema ───────────────╮│RAM  ▕████████░░░░░░░░░░░░░░░░░░▏ 11.0 GiB / 31.0 GiB    │
-│usuario@equipo          ││Swap ▕░░░░░░░░░░░░░░░░░░░░░░░░░░▏ 23.7 MiB / 8.0 GiB     │
-│Equipo  Mi Laptop 15    │╰─────────────────────────────────────────────────────────╯
-│SO      Fedora Linux 44 │  …
-╰────────────────────────╯
+┌──────────────────────────────────────────────────────────────────────┐
+│ Pestañas: 1 Resumen · 2 CPU · 3 RAM · 4 Almacenamiento · 5 GPU · …   │
+├──────────────────────┬───────────────────────────────────────────────┤
+│                      │                                               │
+│   Imagen             │                                               │
+│   (foto, Pokémon     │   Contenido de la pestaña activa              │
+│    o logo)           │   (barras, gráficas de historial, tablas)     │
+│                      │                                               │
+├──────────────────────┤                                               │
+│   Sistema            │                                               │
+│   usuario@equipo,    │                                               │
+│   SO, kernel, CPU,   │                                               │
+│   GPU, memoria…      │                                               │
+├──────────────────────┴───────────────────────────────────────────────┤
+│ Atajos de teclado de la pestaña actual                               │
+└──────────────────────────────────────────────────────────────────────┘
 ```
 
-- **Izquierda:** una foto (tuya o un Pokémon de `pokemon-colorscripts`) que se ajusta sola
-  al tamaño del panel y, debajo, el resumen del sistema al estilo fastfetch.
-- **Derecha:** pestañas con datos en vivo, que se actualizan cada segundo.
+| # | Pestaña | Contenido |
+|---|---|---|
+| 1 | Resumen | Uso de CPU con historial, RAM y swap, particiones, estado de las GPU, red, batería y procesos con más CPU |
+| 2 | CPU | Modelo, núcleos e hilos, frecuencias, carga media, uso por hilo, historial de 120 s y sensores de temperatura |
+| 3 | RAM | Usada, caché y swap; detalle de `/proc/meminfo`; historial y procesos con más memoria |
+| 4 | Almacenamiento | Discos físicos (modelo, tipo, tamaño, temperatura, velocidad de lectura y escritura) y particiones montadas |
+| 5 | GPU | Por cada GPU: fabricante, driver, dirección PCI, estado de energía, uso, VRAM, frecuencia, temperatura y consumo |
+| 6 | Red | Historial de descarga y subida, e interfaces con IP, MAC, velocidad actual y totales |
+| 7 | Procesos | Lista estilo htop con búsqueda, orden por columnas, filtro de procesos propios y envío de señales |
+
+Los datos se actualizan cada segundo (configurable con `--intervalo`).
 
 ## Instalación
 
-Necesitas **Rust 1.95 o superior** (lo exige `sysinfo`). Compruébalo con `rustc --version`
-y actualiza con `rustup update`. Solo funciona en **Linux** (lee `/proc` y `/sys`).
+### Binario precompilado (recomendado)
+
+Cada [release](https://github.com/SalomonAvila/memtop/releases) incluye binarios **estáticos**
+para `x86_64` y `aarch64`. Funcionan en cualquier distribución Linux (Ubuntu, Debian,
+Fedora, Arch, Alpine…) y cualquier versión de `glibc`, porque no dependen de librerías del
+sistema.
 
 ```sh
-git clone https://github.com/<tu-usuario>/memtop.git
-cd memtop
-cargo install --path .
-memtop
+arch="$(uname -m)"   # x86_64 o aarch64
+curl -LO "https://github.com/SalomonAvila/memtop/releases/latest/download/memtop-${arch}-unknown-linux-musl.tar.gz"
+tar xzf "memtop-${arch}-unknown-linux-musl.tar.gz"
+install -Dm755 "memtop-${arch}-unknown-linux-musl/memtop" ~/.local/bin/memtop
 ```
 
-`cargo install` deja el binario en `~/.cargo/bin/memtop`, que ya está en el `PATH` si
-instalaste Rust con rustup. Para actualizarlo tras cambiar el código, repite
-`cargo install --path .`.
+Asegúrate de que `~/.local/bin` está en tu `PATH`. Cada archivo publicado tiene al lado su
+suma `.sha256` para verificar la descarga:
 
-Para probarlo sin instalar: `cargo run --release`.
+```sh
+sha256sum -c "memtop-${arch}-unknown-linux-musl.tar.gz.sha256"
+```
 
-### Dependencias opcionales
+### Desde el código fuente
 
-| Programa | Para qué | Sin él |
+Requiere Rust **1.95 o superior**, instalado con [rustup](https://rustup.rs) (las versiones
+de Rust que traen los gestores de paquetes de muchas distribuciones son más antiguas), y un
+enlazador de C:
+
+| Distribución | Enlazador |
+|---|---|
+| Ubuntu / Debian | `sudo apt install build-essential` |
+| Fedora | `sudo dnf install gcc` |
+| Arch | `sudo pacman -S base-devel` |
+
+```sh
+git clone https://github.com/SalomonAvila/memtop.git
+cd memtop
+cargo install --path . --locked
+```
+
+El binario queda en `~/.cargo/bin/memtop`. Todas las dependencias son crates de Rust que
+Cargo descarga y compila; no hace falta ninguna librería de desarrollo del sistema.
+
+Para generar el mismo binario estático que se publica:
+
+```sh
+rustup target add x86_64-unknown-linux-musl
+cargo build --release --locked --target x86_64-unknown-linux-musl
+# resultado: target/x86_64-unknown-linux-musl/release/memtop
+```
+
+### Programas opcionales
+
+memtop funciona sin ninguno de ellos; solo amplían lo que muestra.
+
+| Programa | Qué añade | De dónde sale |
 |---|---|---|
-| `lspci` (paquete `pciutils`) | Nombre comercial de las GPU ("GeForce RTX 3050 Mobile") | Se muestra el ID del dispositivo |
-| `nvidia-smi` | Uso, VRAM, temperatura y consumo de GPUs NVIDIA | Solo se ve el nombre y el estado de energía |
-| `pokemon-colorscripts` | El Pokémon del panel de fotos | Solo se muestran tus imágenes |
+| `nvidia-smi` | Uso, VRAM, temperatura, consumo y frecuencia de GPUs NVIDIA | Se instala junto con el driver propietario de NVIDIA |
+| `pokemon-colorscripts` | Un Pokémon al azar en el panel de imagen | [gitlab.com/phoneybadger/pokemon-colorscripts](https://gitlab.com/phoneybadger/pokemon-colorscripts) |
 
 ## Uso
 
 ```sh
-memtop                                # tus fotos + un Pokémon
-memtop --foto ~/Imágenes/mi-pc.jpg    # una imagen concreta
-memtop --foto ~/Imágenes/fondos/      # todas las imágenes de una carpeta
-memtop --sin-pokemon --intervalo 2    # solo tus fotos, actualizar cada 2 s
+memtop                                  # imágenes de la carpeta por defecto
+memtop --foto ~/Imágenes/equipo.jpg     # una imagen concreta
+memtop --foto ~/Imágenes/fondos/        # todas las imágenes de una carpeta
+memtop --sin-pokemon --intervalo 2      # sin Pokémon, actualizando cada 2 s
 ```
 
-| Opción | Qué hace |
+| Opción | Descripción |
 |---|---|
-| `--foto RUTA` | Imagen o carpeta para el panel izquierdo (por defecto `~/.config/memtop/fotos/`) |
-| `--sin-pokemon` | No añadir el Pokémon de `pokemon-colorscripts` |
-| `--halfblocks` | Dibujar las fotos con caracteres `▀` aunque la terminal soporte imágenes |
-| `-i`, `--intervalo SEG` | Segundos entre actualizaciones (por defecto 1, mínimo 0.2) |
+| `--foto RUTA` | Imagen o carpeta de imágenes para el panel izquierdo. Por defecto: `$XDG_CONFIG_HOME/memtop/fotos/` (normalmente `~/.config/memtop/fotos/`) |
+| `--sin-pokemon` | No mostrar Pokémon aunque `pokemon-colorscripts` esté instalado |
+| `--halfblocks` | Dibujar las imágenes con caracteres `▀` aunque la terminal admita gráficos |
+| `-i`, `--intervalo SEG` | Segundos entre actualizaciones. Por defecto `1`, mínimo `0.2` |
+| `-V`, `--version` | Mostrar la versión |
 | `-h`, `--help` | Mostrar la ayuda |
 
-## Pestañas
-
-| # | Pestaña | Qué muestra |
-|---|---|---|
-| 1 | Resumen | CPU, RAM, swap, particiones, GPU, red, batería y procesos con más CPU |
-| 2 | CPU | Modelo, núcleos e hilos, frecuencias, carga media, uso por hilo, gráfica de 120 s y sensores de temperatura |
-| 3 | RAM | Usada / caché / swap, detalle de `/proc/meminfo`, gráfica y procesos con más memoria |
-| 4 | Almacenamiento | Discos físicos (modelo, tipo, temperatura, lectura/escritura) y particiones montadas |
-| 5 | GPU | Cada GPU: driver, estado de energía, uso, VRAM, frecuencia, temperatura y consumo |
-| 6 | Red | Gráficas de bajada y subida, e interfaces con IP, MAC y totales |
-| 7 | Procesos | Lista estilo htop: buscar, ordenar, ver solo los tuyos y terminar procesos |
-
-## Panel de fotos
-
-**Tus imágenes:** copia archivos **png, jpg/jpeg, webp, gif, bmp o tiff** a
-`~/.config/memtop/fotos/` (o usa `--foto`) y cambia entre ellos con `f` / `F`.
-Se escalan al panel manteniendo la proporción y quedan centrados.
-
-- En **Kitty, WezTerm, Ghostty, Konsole o foot** se ven con resolución real (protocolos kitty / sixel).
-- En las demás terminales (por ejemplo Ptyxis o GNOME Terminal) se dibujan con caracteres `▀`.
-
-La detección es automática.
-
-**Pokémon:** si tienes `pokemon-colorscripts`, se añade un Pokémon al azar al final de la lista
-(cada vez que llegas a él sale otro). El dibujo se convierte en píxeles, se le recortan los
-bordes vacíos y se reescala para llenar el panel: si cabe agrandado usa un factor entero
-(×2, ×3…) para que se vea nítido, y si no, la escala exacta. Se reajusta al cambiar el
-tamaño de la ventana.
-
-## GPU NVIDIA en portátiles híbridos
-
-Consultar `nvidia-smi` despierta la gráfica dedicada y gasta batería. Por eso memtop
-**solo la consulta mientras estás en la pestaña GPU**, y nunca si está suspendida. En el resto
-de pestañas solo lee su estado de energía desde `/sys`.
+Códigos de salida: `0` correcto, `1` error en tiempo de ejecución, `2` opción inválida.
 
 ## Teclas
 
+Pulsa `?` dentro de memtop para ver esta lista.
+
 | Tecla | Acción |
 |---|---|
-| `← →` / `Tab` / `h l` | Cambiar de pestaña |
+| `←` `→`, `Tab`, `Shift+Tab`, `h` `l` | Pestaña anterior / siguiente |
 | `1` … `7` | Ir a una pestaña |
-| `f` / `F` | Foto siguiente / anterior |
-| `espacio` | Pausar / reanudar la actualización |
+| `f` / `F` | Imagen siguiente / anterior |
+| `espacio` | Pausar o reanudar la actualización |
 | `?` | Ayuda |
-| `q` / `Esc` / `Ctrl+C` | Salir |
+| `q`, `Esc`, `Ctrl+C` | Salir |
 
 En la pestaña **Procesos**:
 
 | Tecla | Acción |
 |---|---|
-| `↑ ↓` / `j k` | Moverse (`PgUp`/`PgDn` de 15 en 15, `g`/`G` al inicio o al final) |
-| `/` | Buscar por nombre, comando, PID o usuario (`Enter` acepta, `Esc` borra) |
-| `c` `m` `p` `n` `u` | Ordenar por CPU, memoria, PID, nombre o usuario (repetir la tecla invierte el orden) |
-| `o` | Solo mis procesos |
-| `x` | Quitar filtros |
-| `t` / `F9` | Terminar el proceso (SIGTERM), con confirmación |
-| `K` | Matar el proceso (SIGKILL), con confirmación |
+| `↑` `↓`, `j` `k` | Mover la selección |
+| `PgUp` `PgDn` | Mover de 15 en 15 |
+| `g` / `G`, `Inicio` / `Fin` | Ir al primero / al último |
+| `/` | Buscar por nombre, línea de comandos, PID o usuario (`Enter` acepta, `Esc` borra) |
+| `c` `m` `p` `n` `u` | Ordenar por CPU, memoria, PID, nombre o usuario. Repetir la tecla invierte el orden |
+| `o` | Mostrar solo los procesos del usuario actual |
+| `x` | Quitar búsqueda y filtros |
+| `t`, `F9` | Enviar SIGTERM al proceso seleccionado (pide confirmación) |
+| `K` | Enviar SIGKILL al proceso seleccionado (pide confirmación) |
 
-Solo puedes terminar tus propios procesos; los de `root` u otros usuarios darán "sin permiso".
+Al buscar, filtrar u ordenar, la selección vuelve al primer proceso de la lista para que
+nunca quede seleccionado uno que no se ve.
 
-## De dónde salen los datos
+## Panel de imagen
 
-Todo se lee localmente, sin privilegios de root:
+El panel izquierdo muestra, en este orden:
 
-- CPU, procesos, red, particiones y temperaturas: crate [`sysinfo`](https://crates.io/crates/sysinfo).
-- Memoria: `/proc/meminfo`.
-- Discos físicos, velocidades y temperatura de NVMe: `/sys/block`.
-- GPU: `/sys/bus/pci/devices`, `lspci` y `nvidia-smi`.
-- Batería: `/sys/class/power_supply`.
-- Equipo y SO: `/sys/class/dmi/id` y `/etc/os-release`.
+1. Las imágenes de `--foto` o de la carpeta por defecto. Formatos: **png, jpg/jpeg, webp,
+   gif, bmp y tiff**.
+2. Un Pokémon al azar, si `pokemon-colorscripts` está instalado y no se usó `--sin-pokemon`.
+   Cada vez que se llega a él con `f` aparece otro.
+3. Si no hay ninguno de los dos, el logo de memtop, incluido en el binario.
 
-## Estructura del repositorio
+Las imágenes se escalan para llenar el panel conservando la proporción. memtop detecta qué
+admite la terminal:
+
+| Terminal | Cómo se ven las imágenes |
+|---|---|
+| Kitty, WezTerm, Ghostty, Konsole, foot, iTerm2 y otras con protocolo kitty, sixel o iTerm2 | Con su resolución real |
+| El resto (GNOME Terminal, Ptyxis, xterm…) | Con caracteres de medio bloque `▀` |
+
+El pixel art (Pokémon y logo) se convierte en una cuadrícula de píxeles, se le recortan los
+bordes vacíos y se redibuja escalado al panel. Si un factor entero (×2, ×3…) llena al menos
+el 85 % del espacio se usa ese, para que se vea nítido; si no, la escala exacta.
+
+## Datos y permisos
+
+memtop solo **lee** información local: no necesita root, no escribe archivos y no se conecta
+a la red. La única acción que modifica el sistema es enviar una señal a un proceso, y siempre
+pide confirmación; como usuario normal solo afecta a tus propios procesos.
+
+| Dato | Fuente |
+|---|---|
+| CPU, procesos, red, particiones, temperaturas | crate [`sysinfo`](https://crates.io/crates/sysinfo) (`/proc`, `/sys`) |
+| Memoria | `/proc/meminfo` |
+| Discos físicos, velocidad y temperatura de NVMe | `/sys/block` |
+| Modelo del equipo | `/sys/class/dmi/id` |
+| Sistema operativo | `/etc/os-release` |
+| Batería | `/sys/class/power_supply` |
+| GPU (nombre, driver, estado de energía, datos AMD e Intel) | `/sys/bus/pci/devices` y la base PCI incluida en `data/pci-gpu.ids` |
+| GPU NVIDIA (uso, VRAM, temperatura, consumo) | `nvidia-smi`, si está instalado |
+
+**Portátiles con gráfica híbrida.** Consultar `nvidia-smi` despierta la gráfica dedicada y
+aumenta el consumo. memtop solo la consulta mientras la pestaña GPU está visible y nunca
+cuando está suspendida; en el resto de pestañas solo lee su estado de energía desde `/sys`.
+
+**Contenedores.** Dentro de un contenedor los datos de `/proc` y `/sys` pueden ser los del
+anfitrión (kernel, discos, sensores) o estar limitados (red, procesos).
+
+## Desarrollo
+
+```sh
+cargo run --release          # ejecutar
+cargo test                   # pruebas
+cargo fmt                    # formato
+cargo clippy --all-targets -- -D warnings
+```
+
+### Estructura
 
 ```
 memtop/
-├── .gitignore
+├── .github/workflows/
+│   ├── ci.yml                  Formato, clippy, pruebas y binario estático en cada push
+│   └── release.yml             Publica binarios al subir una etiqueta vX.Y.Z
+├── data/
+│   └── pci-gpu.ids             Extracto de pci.ids con los fabricantes de GPU
+├── scripts/
+│   └── actualizar-pci-ids.sh   Regenera data/pci-gpu.ids
+├── src/
+│   ├── main.rs                 Opciones de línea de comandos y bucle principal
+│   ├── app.rs                  Estado de la interfaz y teclas
+│   ├── ui.rs                   Dibujo de todas las pestañas
+│   ├── sistema.rs              Lectura de CPU, memoria, discos, red, procesos, sensores y batería
+│   ├── gpu.rs                  Detección de GPUs y consulta a nvidia-smi
+│   ├── pci.rs                  Nombres de GPU a partir de la base PCI incluida
+│   └── foto.rs                 Panel de imagen, sprites y logo
+├── CHANGELOG.md
 ├── Cargo.toml
 ├── Cargo.lock
 ├── LICENSE
-├── README.md
-└── src/
-    ├── main.rs      Opciones de línea de comandos y bucle principal
-    ├── app.rs       Estado: pestañas, lista de procesos, teclas
-    ├── ui.rs        Todo el dibujo (pestañas, barras, gráficas, tablas, ventanas)
-    ├── sistema.rs   Lectura de CPU, RAM, discos, red, procesos, sensores y batería
-    ├── gpu.rs       Detección de GPUs y consulta a nvidia-smi en un hilo aparte
-    └── foto.rs      Panel de fotos: imágenes y Pokémon reescalable
+└── THIRD_PARTY_NOTICES.md      Licencias de los datos y crates de terceros
 ```
 
-## Problemas comunes
+### Actualizar la base de GPUs
 
-- **Las fotos se ven pixeladas:** tu terminal no soporta imágenes; usa Kitty, WezTerm, Ghostty, Konsole o foot.
-- **Quedan restos de la foto anterior** (en terminales con sixel): cambia el tamaño de la ventana para forzar un redibujado, y avisa del caso para corregirlo.
-- **No aparece el Pokémon:** comprueba que `pokemon-colorscripts -r` funciona en tu terminal y que no usaste `--sin-pokemon`.
-- **La GPU NVIDIA sale sin datos:** entra en la pestaña 5. Si está "En reposo", es normal: no se la despierta a propósito.
+`data/pci-gpu.ids` se incluye en el binario al compilar. Para añadir modelos nuevos:
+
+```sh
+scripts/actualizar-pci-ids.sh                 # descarga la última versión de pci-ids.ucw.cz
+scripts/actualizar-pci-ids.sh /usr/share/hwdata/pci.ids   # o usa una copia local
+```
+
+### Publicar una versión
+
+1. Actualiza `version` en `Cargo.toml` y añade la entrada en `CHANGELOG.md`.
+2. Crea y sube la etiqueta:
+   ```sh
+   git tag v0.2.0
+   git push origin v0.2.0
+   ```
+3. El flujo `release.yml` comprueba que la etiqueta coincide con `Cargo.toml`, crea la
+   release y adjunta los binarios estáticos con sus sumas SHA-256.
 
 ## Licencia
 
-[MIT](LICENSE)
+Código bajo licencia [MIT](LICENSE).
+
+`data/pci-gpu.ids` es un extracto de la base [pci.ids](https://pci-ids.ucw.cz), distribuida
+bajo GPL-2.0-or-later o BSD-3-Clause a elección; memtop la usa bajo BSD-3-Clause. El texto
+completo está en [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md), que se incluye en cada
+release.
+
+Pokémon es una marca de Nintendo, Game Freak y The Pokémon Company. memtop no incluye
+imágenes de Pokémon: solo muestra lo que genera `pokemon-colorscripts` si el usuario lo
+tiene instalado.

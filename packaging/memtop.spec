@@ -8,7 +8,7 @@
 #     rpmbuild --rebuild rpm/memtop-*.src.rpm
 
 Name:           memtop
-Version:        0.1.0
+Version:        0.1.1
 Release:        1%{?dist}
 Summary:        System information and resource monitor in a single terminal screen
 Summary(es):    Información del sistema y monitor de recursos en una sola pantalla de terminal
@@ -65,5 +65,8 @@ instalado, y el uso de la GPU en NVIDIA si nvidia-smi está disponible.
 %{_bindir}/memtop
 
 %changelog
+* Sat Nov 07 2026 SalomonAvila <salomon.avila2506@gmail.com> - 0.1.1-1
+- Nueva versión 0.1.1
+
 * Mon Nov 02 2026 SalomonAvila <salomon.avila2506@gmail.com> - 0.1.0-1
 - Primera versión empaquetada

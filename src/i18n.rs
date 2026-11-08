@@ -549,9 +549,9 @@ Dentro de memtop pulsa ? para ver todas las teclas.
 };
 
 pub const EN: Texts = Texts {
-    tab_summary: "Overview",
+    tab_summary: "Summary",
     tab_cpu: "CPU",
-    tab_ram: "Memory",
+    tab_ram: "RAM",
     tab_storage: "Storage",
     tab_gpu: "GPU",
     tab_network: "Network",

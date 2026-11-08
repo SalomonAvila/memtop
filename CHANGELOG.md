@@ -35,6 +35,8 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   follow `LANG`, then `--lang`, then the configuration file, and default to English.
 - `--lang` also applies to `--help` when given after it.
 - The left column shows only the System panel by default.
+- The English tab names are now "Summary" and "RAM" (were "Overview" and "Memory"), matching
+  the `start_tab` values.
 - The documentation is now in English.
 
 ### Added

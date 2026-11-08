@@ -22,7 +22,7 @@ use ratatui::{
 };
 
 use crate::{
-    app::{App, Modo, OrdenProc, Pestana},
+    app::{App, Mode, ProcessSort, Tab},
     config::Theme,
     i18n,
     logo::Sprite,
@@ -199,51 +199,44 @@ pub fn dibujar(f: &mut Frame, app: &mut App) {
         sis,
     );
 
-    match app.pestana {
-        Pestana::Resumen => tab_resumen(f, app, der),
-        Pestana::Cpu => tab_cpu(f, app, der),
-        Pestana::Ram => tab_ram(f, app, der),
-        Pestana::Almacenamiento => tab_almacenamiento(f, app, der),
-        Pestana::Gpu => tab_gpu(f, app, der),
-        Pestana::Red => tab_red(f, app, der),
-        Pestana::Procesos => tab_procesos(f, app, der),
+    match app.tab {
+        Tab::Summary => tab_resumen(f, app, der),
+        Tab::Cpu => tab_cpu(f, app, der),
+        Tab::Ram => tab_ram(f, app, der),
+        Tab::Storage => tab_almacenamiento(f, app, der),
+        Tab::Gpu => tab_gpu(f, app, der),
+        Tab::Network => tab_red(f, app, der),
+        Tab::Processes => tab_procesos(f, app, der),
     }
 
     dibujar_pie(f, app, pie);
 
-    match &app.modo {
-        Modo::Ayuda => dibujar_ayuda(f),
-        Modo::Confirmar {
-            pid,
-            nombre,
-            forzar,
-        } => dibujar_confirmar(f, *pid, nombre, *forzar),
+    match &app.mode {
+        Mode::Help => dibujar_ayuda(f),
+        Mode::Confirm { pid, name, force } => dibujar_confirmar(f, *pid, name, *force),
         _ => {}
     }
 }
 
 fn dibujar_pestanas(f: &mut Frame, app: &App, area: Rect) {
-    let titulos: Vec<Line> = Pestana::TODAS
+    let titulos: Vec<Line> = Tab::ALL
         .iter()
         .enumerate()
         .map(|(i, p)| {
             Line::from(vec![
                 Span::styled(format!("{} ", i + 1), Style::new().fg(tema().muted)),
-                Span::raw(p.titulo()),
+                Span::raw(p.title()),
             ])
         })
         .collect();
-    let sel = Pestana::TODAS
-        .iter()
-        .position(|p| *p == app.pestana)
-        .unwrap_or(0);
+    let sel = Tab::ALL.iter().position(|p| *p == app.tab).unwrap_or(0);
 
     let info = &app.monitor.info;
     let mut derecha = vec![Span::styled(
         format!(" {}@{} ", info.user, info.host),
         Style::new().fg(Color::Gray),
     )];
-    if app.pausado {
+    if app.paused {
         derecha.push(Span::styled(
             format!(" ⏸ {} ", i18n::t().paused),
             Style::new().fg(Color::Black).bg(Color::Yellow),
@@ -1076,25 +1069,25 @@ fn partes_comando(p: &Process) -> (String, String, String) {
 fn tab_procesos(f: &mut Frame, app: &mut App, area: Rect) {
     let t = i18n::t();
     let total_ram = app.monitor.memory.total;
-    let flecha = |o: OrdenProc| {
-        if app.orden_proc == o {
-            if app.desc { " ↓" } else { " ↑" }
+    let flecha = |o: ProcessSort| {
+        if app.process_sort == o {
+            if app.descending { " ↓" } else { " ↑" }
         } else {
             ""
         }
     };
     let cab = cabecera([
-        format!("{}{}", t.col_pid, flecha(OrdenProc::Pid)),
-        format!("{}{}", t.col_user, flecha(OrdenProc::Usuario)),
-        format!("{}{}", t.col_cpu, flecha(OrdenProc::Cpu)),
-        format!("{}{}", t.col_mem, flecha(OrdenProc::Memoria)),
+        format!("{}{}", t.col_pid, flecha(ProcessSort::Pid)),
+        format!("{}{}", t.col_user, flecha(ProcessSort::User)),
+        format!("{}{}", t.col_cpu, flecha(ProcessSort::Cpu)),
+        format!("{}{}", t.col_mem, flecha(ProcessSort::Memory)),
         t.col_res.into(),
         t.state.into(),
         t.col_cpu_time.into(),
-        format!("{}{}", t.col_command, flecha(OrdenProc::Nombre)),
+        format!("{}{}", t.col_command, flecha(ProcessSort::Name)),
     ]);
 
-    let lista = app.procesos();
+    let lista = app.processes();
     let n = lista.len();
     let filas: Vec<Row> = lista
         .iter()
@@ -1121,12 +1114,12 @@ fn tab_procesos(f: &mut Frame, app: &mut App, area: Rect) {
         .collect();
 
     let mut titulo = format!(" {} ({n}) ", t.tab_processes);
-    if app.solo_mios {
+    if app.mine_only {
         titulo.push_str(&format!("· {} ", t.mine_only));
     }
     let mut block = bloque(titulo);
-    if app.modo == Modo::Buscando || !app.busqueda.is_empty() {
-        let cursor = if app.modo == Modo::Buscando {
+    if app.mode == Mode::Searching || !app.search.is_empty() {
+        let cursor = if app.mode == Mode::Searching {
             "▏"
         } else {
             ""
@@ -1135,7 +1128,7 @@ fn tab_procesos(f: &mut Frame, app: &mut App, area: Rect) {
             Line::from(vec![
                 Span::styled(" / ", negrita(Color::Yellow)),
                 Span::styled(
-                    format!("{}{cursor} ", app.busqueda),
+                    format!("{}{cursor} ", app.search),
                     Style::new().fg(Color::Yellow),
                 ),
             ])
@@ -1163,10 +1156,10 @@ fn tab_procesos(f: &mut Frame, app: &mut App, area: Rect) {
             .add_modifier(Modifier::BOLD),
     )
     .block(block);
-    f.render_stateful_widget(t, area, &mut app.tabla_proc);
+    f.render_stateful_widget(t, area, &mut app.process_table);
 
     if n > area.height.saturating_sub(3) as usize {
-        let mut sb = ScrollbarState::new(n).position(app.tabla_proc.selected().unwrap_or(0));
+        let mut sb = ScrollbarState::new(n).position(app.process_table.selected().unwrap_or(0));
         f.render_stateful_widget(
             Scrollbar::new(ScrollbarOrientation::VerticalRight)
                 .style(Style::new().fg(tema().muted)),
@@ -1191,7 +1184,7 @@ fn fmt_tiempo(s: u64) -> String {
 // ───────────────────────────── pie y ventanas ─────────────────────────────
 
 fn dibujar_pie(f: &mut Frame, app: &App, area: Rect) {
-    if let Some((txt, error, _)) = &app.mensaje {
+    if let Some((txt, error, _)) = &app.notice {
         let c = if *error { Color::Red } else { Color::Green };
         f.render_widget(
             Paragraph::new(Line::styled(format!(" {txt}"), Style::new().fg(c))),
@@ -1200,13 +1193,13 @@ fn dibujar_pie(f: &mut Frame, app: &App, area: Rect) {
         return;
     }
     let t = i18n::t();
-    let pares: &[(&str, &str)] = match (&app.modo, app.pestana) {
-        (Modo::Buscando, _) => &[
+    let pares: &[(&str, &str)] = match (&app.mode, app.tab) {
+        (Mode::Searching, _) => &[
             ("Enter", t.footer_accept),
             ("Esc", t.footer_clear),
             ("↑↓", t.footer_move),
         ],
-        (_, Pestana::Procesos) => &[
+        (_, Tab::Processes) => &[
             ("↑↓", t.footer_move),
             ("/", t.footer_search),
             ("c m p n u", t.footer_sort),

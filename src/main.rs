@@ -173,13 +173,13 @@ fn iniciar(config: Config) -> Result<()> {
 fn ejecutar(terminal: &mut DefaultTerminal, mut app: App, intervalo: Duration) -> Result<()> {
     let mut siguiente_tick = Instant::now() + intervalo;
 
-    while !app.salir {
+    while !app.quit {
         terminal.draw(|f| ui::dibujar(f, &mut app))?;
 
         let espera = siguiente_tick.saturating_duration_since(Instant::now());
         if event::poll(espera)? {
             match event::read()? {
-                Event::Key(k) if k.kind == KeyEventKind::Press => app.tecla(k),
+                Event::Key(k) if k.kind == KeyEventKind::Press => app.key(k),
                 _ => {}
             }
         }
@@ -229,7 +229,7 @@ mod tests {
         assert_eq!(c.interval, 2.0);
         assert_eq!(c.language, i18n::LanguageSetting::En);
         // Lo que no se indicó en la línea de comandos sale del archivo.
-        assert_eq!(c.start_tab, app::Pestana::Red);
+        assert_eq!(c.start_tab, app::Tab::Network);
     }
 
     #[test]

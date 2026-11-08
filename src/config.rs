@@ -16,7 +16,7 @@ use ratatui::style::Color;
 use serde::{Deserialize, Deserializer, de};
 
 use crate::{
-    app::{OrdenProc, Pestana},
+    app::{ProcessSort, Tab},
     i18n::{self, LanguageSetting},
 };
 
@@ -33,7 +33,7 @@ pub struct Config {
     pub language: LanguageSetting,
     /// Seconds between refreshes.
     pub interval: f64,
-    pub start_tab: Pestana,
+    pub start_tab: Tab,
     /// Show the memtop logo above the System panel. Without it, the System panel takes the
     /// whole left column.
     pub logo: bool,
@@ -45,7 +45,7 @@ pub struct Config {
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct ProcessSettings {
-    pub sort: OrdenProc,
+    pub sort: ProcessSort,
     pub mine_only: bool,
 }
 
@@ -68,7 +68,7 @@ impl Default for Config {
         Self {
             language: LanguageSetting::Auto,
             interval: 1.0,
-            start_tab: Pestana::Resumen,
+            start_tab: Tab::Summary,
             logo: false,
             processes: ProcessSettings::default(),
             colors: Theme::default(),
@@ -79,7 +79,7 @@ impl Default for Config {
 impl Default for ProcessSettings {
     fn default() -> Self {
         Self {
-            sort: OrdenProc::Cpu,
+            sort: ProcessSort::Cpu,
             mine_only: false,
         }
     }
@@ -195,14 +195,40 @@ mod tests {
         .unwrap();
         assert_eq!(c.language, LanguageSetting::En);
         assert_eq!(c.refresh_interval(), Duration::from_millis(2500));
-        assert_eq!(c.start_tab, Pestana::Procesos);
+        assert_eq!(c.start_tab, Tab::Processes);
         assert!(c.logo);
-        assert_eq!(c.processes.sort, OrdenProc::Memoria);
+        assert_eq!(c.processes.sort, ProcessSort::Memory);
         assert!(c.processes.mine_only);
         assert_eq!(c.colors.accent, Color::LightMagenta);
         assert_eq!(c.colors.muted, Color::Indexed(244));
         assert_eq!(c.colors.label, Color::Rgb(0xff, 0x88, 0x00));
         assert_eq!(c.colors.selection, Color::Blue);
+    }
+
+    #[test]
+    fn accepts_every_tab_and_sort_value() {
+        for (value, tab) in [
+            ("summary", Tab::Summary),
+            ("cpu", Tab::Cpu),
+            ("ram", Tab::Ram),
+            ("storage", Tab::Storage),
+            ("gpu", Tab::Gpu),
+            ("network", Tab::Network),
+            ("processes", Tab::Processes),
+        ] {
+            let c = parse(&format!("start_tab = \"{value}\"")).unwrap();
+            assert_eq!(c.start_tab, tab, "{value}");
+        }
+        for (value, sort) in [
+            ("cpu", ProcessSort::Cpu),
+            ("memory", ProcessSort::Memory),
+            ("pid", ProcessSort::Pid),
+            ("name", ProcessSort::Name),
+            ("user", ProcessSort::User),
+        ] {
+            let c = parse(&format!("[processes]\nsort = \"{value}\"")).unwrap();
+            assert_eq!(c.processes.sort, sort, "{value}");
+        }
     }
 
     #[test]

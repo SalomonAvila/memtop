@@ -10,7 +10,7 @@ use serde::Deserialize;
 use crate::{
     config::Config,
     gpu, i18n,
-    sistema::{ErrorSenal, Monitor, Proceso},
+    system::{Monitor, Process, SignalError},
 };
 
 /// Pestañas del panel derecho, en el orden en que se muestran (teclas `1`–`7`).
@@ -141,7 +141,7 @@ impl App {
 
     pub fn tick(&mut self) {
         if !self.pausado {
-            self.monitor.actualizar();
+            self.monitor.refresh();
             self.sincronizar_seleccion();
         }
         if self
@@ -154,29 +154,29 @@ impl App {
     }
 
     /// Procesos filtrados y ordenados como en la pestaña Procesos.
-    pub fn procesos(&self) -> Vec<&Proceso> {
+    pub fn procesos(&self) -> Vec<&Process> {
         let q = self.busqueda.to_lowercase();
-        let yo = &self.monitor.info.usuario;
-        let mut v: Vec<&Proceso> = self
+        let yo = &self.monitor.info.user;
+        let mut v: Vec<&Process> = self
             .monitor
-            .procesos
+            .processes
             .iter()
-            .filter(|p| !self.solo_mios || &p.usuario == yo)
+            .filter(|p| !self.solo_mios || &p.user == yo)
             .filter(|p| {
                 q.is_empty()
-                    || p.nombre.to_lowercase().contains(&q)
-                    || p.comando.to_lowercase().contains(&q)
+                    || p.name.to_lowercase().contains(&q)
+                    || p.command.to_lowercase().contains(&q)
                     || p.pid.to_string() == q
-                    || p.usuario.to_lowercase() == q
+                    || p.user.to_lowercase() == q
             })
             .collect();
         v.sort_by(|a, b| {
             let o = match self.orden_proc {
                 OrdenProc::Cpu => a.cpu.total_cmp(&b.cpu),
-                OrdenProc::Memoria => a.memoria.cmp(&b.memoria),
+                OrdenProc::Memoria => a.memory.cmp(&b.memory),
                 OrdenProc::Pid => a.pid.cmp(&b.pid),
-                OrdenProc::Nombre => a.nombre.to_lowercase().cmp(&b.nombre.to_lowercase()),
-                OrdenProc::Usuario => a.usuario.cmp(&b.usuario),
+                OrdenProc::Nombre => a.name.to_lowercase().cmp(&b.name.to_lowercase()),
+                OrdenProc::Usuario => a.user.cmp(&b.user),
             };
             if self.desc { o.reverse() } else { o }.then(a.pid.cmp(&b.pid))
         });
@@ -184,10 +184,10 @@ impl App {
     }
 
     /// Top N procesos por CPU o memoria (para Resumen/CPU/RAM).
-    pub fn top(&self, por_memoria: bool, n: usize) -> Vec<&Proceso> {
-        let mut v: Vec<&Proceso> = self.monitor.procesos.iter().collect();
+    pub fn top(&self, por_memoria: bool, n: usize) -> Vec<&Process> {
+        let mut v: Vec<&Process> = self.monitor.processes.iter().collect();
         if por_memoria {
-            v.sort_by_key(|p| std::cmp::Reverse(p.memoria));
+            v.sort_by_key(|p| std::cmp::Reverse(p.memory));
         } else {
             v.sort_by(|a, b| b.cpu.total_cmp(&a.cpu));
         }
@@ -227,9 +227,9 @@ impl App {
         self.tabla_proc.select(Some(n));
     }
 
-    fn seleccionado(&self) -> Option<&Proceso> {
+    fn seleccionado(&self) -> Option<&Process> {
         let pid = self.sel_pid?;
-        self.monitor.procesos.iter().find(|p| p.pid == pid)
+        self.monitor.processes.iter().find(|p| p.pid == pid)
     }
 
     fn ir_a(&mut self, p: Pestana) {
@@ -268,7 +268,7 @@ impl App {
                     KeyCode::Char('s' | 'S' | 'y' | 'Y') | KeyCode::Enter
                 ) {
                     let t = i18n::t();
-                    match self.monitor.senal(pid, forzar) {
+                    match self.monitor.signal(pid, forzar) {
                         Ok(()) => self.avisar(
                             format!(
                                 "{} {} {nombre} ({pid})",
@@ -279,9 +279,9 @@ impl App {
                         ),
                         Err(e) => {
                             let motivo = match e {
-                                ErrorSenal::NoExiste => t.signal_no_such_process,
-                                ErrorSenal::SinPermiso => t.signal_permission_denied,
-                                ErrorSenal::NoSoportada => t.signal_unsupported,
+                                SignalError::NoSuchProcess => t.signal_no_such_process,
+                                SignalError::PermissionDenied => t.signal_permission_denied,
+                                SignalError::Unsupported => t.signal_unsupported,
                             };
                             self.avisar(
                                 format!("{} {nombre}: {motivo}", t.notice_could_not_terminate),
@@ -361,7 +361,7 @@ impl App {
                 if let Some(p) = self.seleccionado() {
                     self.modo = Modo::Confirmar {
                         pid: p.pid,
-                        nombre: p.nombre.clone(),
+                        nombre: p.name.clone(),
                         forzar: k.code == KeyCode::Char('K'),
                     };
                 }

@@ -268,7 +268,7 @@ memtop/
 │   ├── i18n.rs                 Interface language and translated text
 │   ├── app.rs                  Interface state and keys
 │   ├── ui.rs                   Drawing of every tab
-│   ├── sistema.rs              Reading CPU, memory, disks, network, processes, sensors and battery
+│   ├── system.rs               Reading CPU, memory, disks, network, processes, sensors and battery
 │   ├── gpu.rs                  GPU detection and nvidia-smi queries
 │   ├── pci.rs                  GPU names from the bundled PCI database
 │   └── logo.rs                 memtop logo in pixel art

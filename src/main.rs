@@ -1,7 +1,7 @@
 //! memtop: información del sistema y monitor de recursos en una sola pantalla de terminal.
 //!
 //! Estructura:
-//! - [`sistema`]: lectura de CPU, memoria, discos, red, procesos, sensores y batería.
+//! - [`system`]: lectura de CPU, memoria, discos, red, procesos, sensores y batería.
 //! - [`gpu`] y [`pci`]: detección de GPUs y sus nombres comerciales.
 //! - [`logo`]: logo de memtop en pixel art para el panel izquierdo.
 //! - [`config`]: archivo de configuración.
@@ -15,7 +15,7 @@ mod gpu;
 mod i18n;
 mod logo;
 mod pci;
-mod sistema;
+mod system;
 mod ui;
 
 use std::{
@@ -158,7 +158,7 @@ fn main() -> ExitCode {
 fn iniciar(config: Config) -> Result<()> {
     ui::fijar_tema(config.colors.clone());
     // Primera lectura antes de entrar a la interfaz: el uso de CPU necesita dos muestras.
-    let monitor = sistema::Monitor::new()?;
+    let monitor = system::Monitor::new()?;
 
     // `ratatui::init` activa el modo raw y la pantalla alternativa, e instala un hook
     // que restaura la terminal si el programa entra en pánico.

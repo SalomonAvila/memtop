@@ -26,9 +26,9 @@ use crate::{
     config::Theme,
     i18n,
     logo::Sprite,
-    sistema::{
-        EstadoBateria, EstadoProceso, HISTORIAL, Proceso, Temperatura, fmt_bytes, fmt_duracion,
-        fmt_tasa,
+    system::{
+        BatteryState, HISTORY_LEN, Process, ProcessState, Temperature, fmt_bytes, fmt_duration,
+        fmt_rate,
     },
 };
 
@@ -240,7 +240,7 @@ fn dibujar_pestanas(f: &mut Frame, app: &App, area: Rect) {
 
     let info = &app.monitor.info;
     let mut derecha = vec![Span::styled(
-        format!(" {}@{} ", info.usuario, info.host),
+        format!(" {}@{} ", info.user, info.host),
         Style::new().fg(Color::Gray),
     )];
     if app.pausado {
@@ -315,27 +315,27 @@ fn marco(texto: &str) -> String {
     format!(" {texto} ")
 }
 
-fn estado_proceso(e: EstadoProceso) -> &'static str {
+fn estado_proceso(e: ProcessState) -> &'static str {
     let t = i18n::t();
     match e {
-        EstadoProceso::Ejecutando => t.proc_running,
-        EstadoProceso::Durmiendo => t.proc_sleeping,
-        EstadoProceso::Inactivo => t.proc_idle,
-        EstadoProceso::EsperaDisco => t.proc_disk_wait,
-        EstadoProceso::Detenido => t.proc_stopped,
-        EstadoProceso::Zombi => t.proc_zombie,
-        EstadoProceso::Otro => t.proc_other,
+        ProcessState::Running => t.proc_running,
+        ProcessState::Sleeping => t.proc_sleeping,
+        ProcessState::Idle => t.proc_idle,
+        ProcessState::DiskWait => t.proc_disk_wait,
+        ProcessState::Stopped => t.proc_stopped,
+        ProcessState::Zombie => t.proc_zombie,
+        ProcessState::Other => t.proc_other,
     }
 }
 
-fn estado_bateria(e: EstadoBateria) -> &'static str {
+fn estado_bateria(e: BatteryState) -> &'static str {
     let t = i18n::t();
     match e {
-        EstadoBateria::Cargando => t.battery_charging,
-        EstadoBateria::Descargando => t.battery_discharging,
-        EstadoBateria::Completa => t.battery_full,
-        EstadoBateria::SinCargar => t.battery_not_charging,
-        EstadoBateria::Desconocido => t.battery_unknown,
+        BatteryState::Charging => t.battery_charging,
+        BatteryState::Discharging => t.battery_discharging,
+        BatteryState::Full => t.battery_full,
+        BatteryState::NotCharging => t.battery_not_charging,
+        BatteryState::Unknown => t.battery_unknown,
     }
 }
 
@@ -347,22 +347,22 @@ fn panel_sistema(app: &App) -> Vec<Line<'static>> {
     let w = 11;
     let mut l = vec![
         Line::from(vec![
-            Span::styled(i.usuario.clone(), negrita(tema().accent)),
+            Span::styled(i.user.clone(), negrita(tema().accent)),
             Span::raw("@"),
             Span::styled(i.host.clone(), negrita(tema().accent)),
         ]),
         Line::styled(
-            "─".repeat(i.usuario.chars().count() + i.host.chars().count() + 1),
+            "─".repeat(i.user.chars().count() + i.host.chars().count() + 1),
             Style::new().fg(tema().muted),
         ),
     ];
-    if let Some(e) = &i.modelo {
+    if let Some(e) = &i.model {
         l.push(clave_valor(t.machine, e.clone(), w));
     }
-    l.push(clave_valor(t.os, i.so.clone(), w));
+    l.push(clave_valor(t.os, i.os.clone(), w));
     l.push(clave_valor(t.kernel, i.kernel.clone(), w));
-    l.push(clave_valor(t.uptime, fmt_duracion(m.uptime), w));
-    if let Some(e) = &i.escritorio {
+    l.push(clave_valor(t.uptime, fmt_duration(m.uptime), w));
+    if let Some(e) = &i.desktop {
         l.push(clave_valor(t.desktop, e.clone(), w));
     }
     if let Some(s) = &i.shell {
@@ -373,7 +373,7 @@ fn panel_sistema(app: &App) -> Vec<Line<'static>> {
     }
     l.push(clave_valor(
         t.cpu,
-        format!("{} ({})", i.cpu_modelo, i.hilos),
+        format!("{} ({})", i.cpu_model, i.threads),
         w,
     ));
     for g in &m.gpus {
@@ -383,27 +383,27 @@ fn panel_sistema(app: &App) -> Vec<Line<'static>> {
         t.memory,
         format!(
             "{} / {}",
-            fmt_bytes(m.memoria.usada()),
-            fmt_bytes(m.memoria.total)
+            fmt_bytes(m.memory.used()),
+            fmt_bytes(m.memory.total)
         ),
         w,
     ));
-    if let Some(raiz) = m.montajes.iter().find(|x| x.punto == "/") {
+    if let Some(raiz) = m.mounts.iter().find(|x| x.mount_point == "/") {
         l.push(clave_valor(
             t.root_disk,
             format!(
                 "{} / {} ({})",
-                fmt_bytes(raiz.usado),
+                fmt_bytes(raiz.used),
                 fmt_bytes(raiz.total),
                 raiz.fs
             ),
             w,
         ));
     }
-    if let Some(b) = &m.bateria {
+    if let Some(b) = &m.battery {
         l.push(clave_valor(
             t.battery,
-            format!("{}% ({})", b.porcentaje, estado_bateria(b.estado)),
+            format!("{}% ({})", b.percent, estado_bateria(b.state)),
             w,
         ));
     }
@@ -434,11 +434,11 @@ fn tab_resumen(f: &mut Frame, app: &mut App, area: Rect) {
     let activas: Vec<_> = m
         .interfaces
         .iter()
-        .filter(|i| i.fisica && !i.ips.is_empty())
+        .filter(|i| i.physical && !i.ips.is_empty())
         .collect();
-    let alto_alm = m.montajes.len().max(1) as u16 + 2;
+    let alto_alm = m.mounts.len().max(1) as u16 + 2;
     let alto_otros =
-        (m.gpus.len() + activas.len().max(1) + usize::from(m.bateria.is_some())) as u16 + 2;
+        (m.gpus.len() + activas.len().max(1) + usize::from(m.battery.is_some())) as u16 + 2;
     let [cpu, mem, alm, otros, top] = Layout::vertical([
         Constraint::Length(6),
         Constraint::Length(4),
@@ -454,7 +454,7 @@ fn tab_resumen(f: &mut Frame, app: &mut App, area: Rect) {
     f.render_widget(block, cpu);
     let [l1, graf] = Layout::vertical([Constraint::Length(1), Constraint::Min(1)]).areas(inner);
     let mut extra = format!("{:5.1}%", m.cpu_total);
-    if let Some(grados) = m.temperatura_cpu() {
+    if let Some(grados) = m.cpu_temperature() {
         extra.push_str(&format!("  {grados:.0}°C"));
     }
     let freq = m.cpu_freq_mhz.iter().max().copied().unwrap_or(0);
@@ -472,24 +472,24 @@ fn tab_resumen(f: &mut Frame, app: &mut App, area: Rect) {
     );
 
     // Memoria
-    let mm = &m.memoria;
+    let mm = &m.memory;
     let w = mem.width.saturating_sub(2);
     let lineas = vec![
         barra(
             "RAM",
             8,
             w,
-            pct(mm.usada(), mm.total),
-            format!("{} / {}", fmt_bytes(mm.usada()), fmt_bytes(mm.total)),
+            pct(mm.used(), mm.total),
+            format!("{} / {}", fmt_bytes(mm.used()), fmt_bytes(mm.total)),
         ),
         barra(
             t.swap,
             8,
             w,
-            pct(mm.swap_usada(), mm.swap_total),
+            pct(mm.swap_used(), mm.swap_total),
             format!(
                 "{} / {}",
-                fmt_bytes(mm.swap_usada()),
+                fmt_bytes(mm.swap_used()),
                 fmt_bytes(mm.swap_total)
             ),
         ),
@@ -498,23 +498,23 @@ fn tab_resumen(f: &mut Frame, app: &mut App, area: Rect) {
 
     // Almacenamiento
     let ancho_etq = m
-        .montajes
+        .mounts
         .iter()
-        .map(|x| x.punto.chars().count())
+        .map(|x| x.mount_point.chars().count())
         .max()
         .unwrap_or(4)
         .clamp(4, 18)
         + 1;
     let lineas: Vec<Line> = m
-        .montajes
+        .mounts
         .iter()
         .map(|x| {
             barra(
-                &x.punto,
+                &x.mount_point,
                 ancho_etq,
                 alm.width.saturating_sub(2),
-                pct(x.usado, x.total),
-                format!("{} / {}", fmt_bytes(x.usado), fmt_bytes(x.total)),
+                pct(x.used, x.total),
+                format!("{} / {}", fmt_bytes(x.used), fmt_bytes(x.total)),
             )
         })
         .collect();
@@ -543,22 +543,22 @@ fn tab_resumen(f: &mut Frame, app: &mut App, area: Rect) {
     for i in &activas {
         lineas.push(Line::from(vec![
             Span::styled(format!("{:<9}", t.network), Style::new().fg(tema().label)),
-            Span::raw(format!("{:<12}", i.nombre)),
+            Span::raw(format!("{:<12}", i.name)),
             Span::styled(
-                format!("↓ {:<13}", fmt_tasa(i.rx_bps)),
+                format!("↓ {:<13}", fmt_rate(i.rx_bps)),
                 Style::new().fg(Color::Green),
             ),
             Span::styled(
-                format!("↑ {}", fmt_tasa(i.tx_bps)),
+                format!("↑ {}", fmt_rate(i.tx_bps)),
                 Style::new().fg(Color::Magenta),
             ),
         ]));
     }
-    if let Some(b) = &m.bateria {
+    if let Some(b) = &m.battery {
         // En la batería, más es mejor: el color va al revés.
-        let c = if b.porcentaje > 40 {
+        let c = if b.percent > 40 {
             Color::Green
-        } else if b.porcentaje > 15 {
+        } else if b.percent > 15 {
             Color::Yellow
         } else {
             Color::Red
@@ -567,8 +567,8 @@ fn tab_resumen(f: &mut Frame, app: &mut App, area: Rect) {
             t.battery,
             9,
             otros.width.saturating_sub(2),
-            b.porcentaje as f64,
-            format!("{}% {}", b.porcentaje, estado_bateria(b.estado)),
+            b.percent as f64,
+            format!("{}% {}", b.percent, estado_bateria(b.state)),
             c,
         ));
     }
@@ -583,21 +583,21 @@ fn tab_resumen(f: &mut Frame, app: &mut App, area: Rect) {
         top,
         &marco(t.title_top_cpu),
         &lista,
-        app.monitor.memoria.total,
+        app.monitor.memory.total,
     );
 }
 
-fn tabla_mini(f: &mut Frame, area: Rect, titulo: &str, lista: &[&Proceso], ram_total: u64) {
+fn tabla_mini(f: &mut Frame, area: Rect, titulo: &str, lista: &[&Process], ram_total: u64) {
     let t = i18n::t();
     let filas = lista.iter().map(|p| {
         Row::new(vec![
             Cell::from(p.pid.to_string()).style(Style::new().fg(tema().muted)),
-            Cell::from(p.nombre.clone()),
+            Cell::from(p.name.clone()),
             Cell::from(format!("{:5.1}", p.cpu)).style(Style::new().fg(color_pct(p.cpu as f64))),
-            Cell::from(format!("{:5.1}", pct(p.memoria, ram_total)))
+            Cell::from(format!("{:5.1}", pct(p.memory, ram_total)))
                 .style(Style::new().fg(Color::LightGreen)),
-            Cell::from(fmt_bytes(p.memoria)),
-            Cell::from(p.usuario.clone()).style(Style::new().fg(Color::Gray)),
+            Cell::from(fmt_bytes(p.memory)),
+            Cell::from(p.user.clone()).style(Style::new().fg(Color::Gray)),
         ])
     });
     let t = Table::new(
@@ -636,14 +636,14 @@ fn tab_cpu(f: &mut Frame, app: &mut App, area: Rect) {
     let fmax = m.cpu_freq_mhz.iter().max().copied().unwrap_or(0);
     let w = 14;
     let fisicos = i
-        .nucleos_fisicos
+        .physical_cores
         .map(|n| n.to_string())
         .unwrap_or_else(|| "?".into());
     let mut l = vec![
-        clave_valor(t.model, i.cpu_modelo.clone(), w),
+        clave_valor(t.model, i.cpu_model.clone(), w),
         clave_valor(
             t.cores,
-            format!("{fisicos} {} · {} {}", t.physical, i.hilos, t.threads),
+            format!("{fisicos} {} · {} {}", t.physical, i.threads, t.threads),
             w,
         ),
         clave_valor(
@@ -659,13 +659,13 @@ fn tab_cpu(f: &mut Frame, app: &mut App, area: Rect) {
             t.load_average,
             format!(
                 "{:.2}  {:.2}  {:.2}   (1, 5, 15 min)",
-                m.carga.0, m.carga.1, m.carga.2
+                m.load.0, m.load.1, m.load.2
             ),
             w,
         ),
-        clave_valor(t.architecture, i.arquitectura.clone(), w),
+        clave_valor(t.architecture, i.arch.clone(), w),
     ];
-    if let Some(grados) = m.temperatura_cpu() {
+    if let Some(grados) = m.cpu_temperature() {
         l.push(clave_temp(t.temperature, grados, w));
     }
     f.render_widget(
@@ -677,7 +677,7 @@ fn tab_cpu(f: &mut Frame, app: &mut App, area: Rect) {
         f,
         graf,
         format!(
-            " {} {:.1}% · {} {HISTORIAL} s ",
+            " {} {:.1}% · {} {HISTORY_LEN} s ",
             t.total_usage, m.cpu_total, t.last
         ),
         &m.hist_cpu,
@@ -692,14 +692,14 @@ fn tab_cpu(f: &mut Frame, app: &mut App, area: Rect) {
     let block = bloque(marco(t.title_per_thread));
     let inner = block.inner(nucleos);
     f.render_widget(block, nucleos);
-    let n = m.cpu_nucleos.len();
+    let n = m.cpu_per_thread.len();
     let mitad = n.div_ceil(2);
     let [c1, c2] =
         Layout::horizontal([Constraint::Percentage(50), Constraint::Percentage(50)]).areas(inner);
     for (col, rango) in [(c1, 0..mitad), (c2, mitad..n)] {
         let lineas: Vec<Line> = rango
             .map(|k| {
-                let u = m.cpu_nucleos[k] as f64;
+                let u = m.cpu_per_thread[k] as f64;
                 let ghz = m.cpu_freq_mhz.get(k).copied().unwrap_or(0) as f64 / 1000.0;
                 barra(
                     &format!("{k:>2}"),
@@ -713,21 +713,21 @@ fn tab_cpu(f: &mut Frame, app: &mut App, area: Rect) {
         f.render_widget(Paragraph::new(lineas), col);
     }
 
-    let mut ts: Vec<&Temperatura> = m.temperaturas.iter().collect();
-    ts.sort_by(|a, b| a.etiqueta.cmp(&b.etiqueta));
+    let mut ts: Vec<&Temperature> = m.temperatures.iter().collect();
+    ts.sort_by(|a, b| a.label.cmp(&b.label));
     let ancho = temps.width.saturating_sub(10) as usize;
     let lineas: Vec<Line> = ts
         .iter()
         .map(|sensor| {
-            let etq: String = sensor.etiqueta.chars().take(ancho).collect();
+            let etq: String = sensor.label.chars().take(ancho).collect();
             let mut s = vec![
                 Span::styled(format!("{etq:<ancho$}"), Style::new().fg(Color::Gray)),
                 Span::styled(
-                    format!("{:>5.0}°C", sensor.grados),
-                    Style::new().fg(color_temp(sensor.grados)),
+                    format!("{:>5.0}°C", sensor.celsius),
+                    Style::new().fg(color_temp(sensor.celsius)),
                 ),
             ];
-            if sensor.critica.is_some_and(|c| sensor.grados >= c) {
+            if sensor.critical.is_some_and(|c| sensor.celsius >= c) {
                 s.push(Span::styled(" !", Style::new().fg(Color::Red)));
             }
             Line::from(s)
@@ -741,7 +741,7 @@ fn tab_cpu(f: &mut Frame, app: &mut App, area: Rect) {
 
 fn tab_ram(f: &mut Frame, app: &mut App, area: Rect) {
     let t = i18n::t();
-    let mm = &app.monitor.memoria;
+    let mm = &app.monitor.memory;
     let [barras, medio, top] = Layout::vertical([
         Constraint::Length(5),
         Constraint::Length(11),
@@ -755,8 +755,8 @@ fn tab_ram(f: &mut Frame, app: &mut App, area: Rect) {
             t.used,
             10,
             w,
-            pct(mm.usada(), mm.total),
-            format!("{} / {}", fmt_bytes(mm.usada()), fmt_bytes(mm.total)),
+            pct(mm.used(), mm.total),
+            format!("{} / {}", fmt_bytes(mm.used()), fmt_bytes(mm.total)),
         ),
         barra_color(
             t.cache,
@@ -770,10 +770,10 @@ fn tab_ram(f: &mut Frame, app: &mut App, area: Rect) {
             t.swap,
             10,
             w,
-            pct(mm.swap_usada(), mm.swap_total),
+            pct(mm.swap_used(), mm.swap_total),
             format!(
                 "{} / {}",
-                fmt_bytes(mm.swap_usada()),
+                fmt_bytes(mm.swap_used()),
                 fmt_bytes(mm.swap_total)
             ),
         ),
@@ -788,23 +788,23 @@ fn tab_ram(f: &mut Frame, app: &mut App, area: Rect) {
     let w = 13;
     let l = vec![
         clave_valor(t.total, fmt_bytes(mm.total), w),
-        clave_valor(t.used, fmt_bytes(mm.usada()), w),
-        clave_valor(t.available, fmt_bytes(mm.disponible), w),
-        clave_valor(t.free, fmt_bytes(mm.libre), w),
+        clave_valor(t.used, fmt_bytes(mm.used()), w),
+        clave_valor(t.available, fmt_bytes(mm.available), w),
+        clave_valor(t.free, fmt_bytes(mm.free), w),
         clave_valor(t.cache, fmt_bytes(mm.cache), w),
         clave_valor(t.buffers, fmt_bytes(mm.buffers), w),
-        clave_valor(t.shared, fmt_bytes(mm.compartida), w),
+        clave_valor(t.shared, fmt_bytes(mm.shared), w),
         clave_valor(t.swap_total, fmt_bytes(mm.swap_total), w),
-        clave_valor(t.swap_used, fmt_bytes(mm.swap_usada()), w),
+        clave_valor(t.swap_used, fmt_bytes(mm.swap_used()), w),
     ];
     f.render_widget(Paragraph::new(l).block(bloque(marco(t.title_details))), det);
     grafica(
         f,
         graf,
         format!(
-            " {} {:.0}% · {} {HISTORIAL} s ",
+            " {} {:.0}% · {} {HISTORY_LEN} s ",
             t.usage,
-            pct(mm.usada(), mm.total),
+            pct(mm.used(), mm.total),
             t.last
         ),
         &app.monitor.hist_ram,
@@ -819,22 +819,22 @@ fn tab_ram(f: &mut Frame, app: &mut App, area: Rect) {
 fn tab_almacenamiento(f: &mut Frame, app: &mut App, area: Rect) {
     let tx = i18n::t();
     let m = &app.monitor;
-    let alto_discos = m.discos.len() as u16 + 4;
+    let alto_discos = m.disks.len() as u16 + 4;
     let [discos, parts] =
         Layout::vertical([Constraint::Length(alto_discos), Constraint::Min(4)]).areas(area);
 
-    let filas = m.discos.iter().map(|d| {
+    let filas = m.disks.iter().map(|d| {
         Row::new(vec![
-            Cell::from(d.nombre.clone()).style(Style::new().fg(tema().accent)),
-            Cell::from(d.modelo.clone().unwrap_or_else(|| "—".into())),
-            Cell::from(d.tipo).style(Style::new().fg(Color::LightMagenta)),
-            Cell::from(fmt_bytes(d.tamano)),
-            match d.temperatura {
+            Cell::from(d.name.clone()).style(Style::new().fg(tema().accent)),
+            Cell::from(d.model.clone().unwrap_or_else(|| "—".into())),
+            Cell::from(d.kind).style(Style::new().fg(Color::LightMagenta)),
+            Cell::from(fmt_bytes(d.size)),
+            match d.temperature {
                 Some(t) => Cell::from(format!("{t:.0}°C")).style(Style::new().fg(color_temp(t))),
                 None => Cell::from("—").style(Style::new().fg(tema().muted)),
             },
-            Cell::from(fmt_tasa(d.lectura_bps)).style(Style::new().fg(Color::Green)),
-            Cell::from(fmt_tasa(d.escritura_bps)).style(Style::new().fg(Color::Magenta)),
+            Cell::from(fmt_rate(d.read_bps)).style(Style::new().fg(Color::Green)),
+            Cell::from(fmt_rate(d.write_bps)).style(Style::new().fg(Color::Magenta)),
         ])
     });
     let t = Table::new(
@@ -871,12 +871,12 @@ fn tab_almacenamiento(f: &mut Frame, app: &mut App, area: Rect) {
     let inner = block.inner(parts);
     f.render_widget(block, parts);
     let mut lineas = Vec::new();
-    for x in &m.montajes {
-        let p = pct(x.usado, x.total);
+    for x in &m.mounts {
+        let p = pct(x.used, x.total);
         lineas.push(Line::from(vec![
-            Span::styled(x.punto.clone(), negrita(tema().accent)),
+            Span::styled(x.mount_point.clone(), negrita(tema().accent)),
             Span::styled(
-                format!("  {} · {}", x.dispositivo, x.fs),
+                format!("  {} · {}", x.device, x.fs),
                 Style::new().fg(Color::Gray),
             ),
         ]));
@@ -887,9 +887,9 @@ fn tab_almacenamiento(f: &mut Frame, app: &mut App, area: Rect) {
             p,
             format!(
                 "{p:.0}%  {} {} · {} {} {}",
-                fmt_bytes(x.usado),
+                fmt_bytes(x.used),
                 tx.used_space,
-                fmt_bytes(x.total - x.usado),
+                fmt_bytes(x.total - x.used),
                 tx.free_of,
                 fmt_bytes(x.total)
             ),
@@ -977,7 +977,7 @@ fn tab_red(f: &mut Frame, app: &mut App, area: Rect) {
     grafica(
         f,
         rx,
-        format!(" ↓ {} {} ", t.download, fmt_tasa(rx_ahora)),
+        format!(" ↓ {} {} ", t.download, fmt_rate(rx_ahora)),
         &m.hist_rx,
         None,
         Color::Green,
@@ -985,7 +985,7 @@ fn tab_red(f: &mut Frame, app: &mut App, area: Rect) {
     grafica(
         f,
         tx,
-        format!(" ↑ {} {} ", t.upload, fmt_tasa(tx_ahora)),
+        format!(" ↑ {} {} ", t.upload, fmt_rate(tx_ahora)),
         &m.hist_tx,
         None,
         Color::Magenta,
@@ -994,15 +994,15 @@ fn tab_red(f: &mut Frame, app: &mut App, area: Rect) {
     let filas = m.interfaces.iter().map(|i| {
         let activa = !i.ips.is_empty();
         Row::new(vec![
-            Cell::from(i.nombre.clone()).style(Style::new().fg(if activa {
+            Cell::from(i.name.clone()).style(Style::new().fg(if activa {
                 tema().accent
             } else {
                 tema().muted
             })),
             Cell::from(resumen_ips(&i.ips)),
             Cell::from(i.mac.clone()).style(Style::new().fg(Color::Gray)),
-            Cell::from(fmt_tasa(i.rx_bps)).style(Style::new().fg(Color::Green)),
-            Cell::from(fmt_tasa(i.tx_bps)).style(Style::new().fg(Color::Magenta)),
+            Cell::from(fmt_rate(i.rx_bps)).style(Style::new().fg(Color::Green)),
+            Cell::from(fmt_rate(i.tx_bps)).style(Style::new().fg(Color::Magenta)),
             Cell::from(fmt_bytes(i.rx_total)),
             Cell::from(fmt_bytes(i.tx_total)),
         ])
@@ -1052,18 +1052,18 @@ fn resumen_ips(ips: &[String]) -> String {
 }
 
 /// Separa la línea de comandos en (ruta, programa, argumentos) para colorearla.
-fn partes_comando(p: &Proceso) -> (String, String, String) {
-    if p.comando.is_empty() {
-        return (String::new(), format!("[{}]", p.nombre), String::new());
+fn partes_comando(p: &Process) -> (String, String, String) {
+    if p.command.is_empty() {
+        return (String::new(), format!("[{}]", p.name), String::new());
     }
-    let (prog, args) = p.comando.split_once(' ').unwrap_or((&p.comando, ""));
+    let (prog, args) = p.command.split_once(' ').unwrap_or((&p.command, ""));
     let (dir, base) = match prog.rsplit_once('/') {
         Some((d, b)) => (format!("{d}/"), b.to_string()),
         None => (String::new(), prog.to_string()),
     };
     // Si el programa no se parece al nombre del proceso (p. ej. "RDD Process"), mostrar el nombre primero.
-    if !base.starts_with(&p.nombre) && !p.nombre.starts_with(&base) {
-        return (String::new(), p.nombre.clone(), format!("  {}", p.comando));
+    if !base.starts_with(&p.name) && !p.name.starts_with(&base) {
+        return (String::new(), p.name.clone(), format!("  {}", p.command));
     }
     let args = if args.is_empty() {
         String::new()
@@ -1075,7 +1075,7 @@ fn partes_comando(p: &Proceso) -> (String, String, String) {
 
 fn tab_procesos(f: &mut Frame, app: &mut App, area: Rect) {
     let t = i18n::t();
-    let total_ram = app.monitor.memoria.total;
+    let total_ram = app.monitor.memory.total;
     let flecha = |o: OrdenProc| {
         if app.orden_proc == o {
             if app.desc { " ↓" } else { " ↑" }
@@ -1099,18 +1099,18 @@ fn tab_procesos(f: &mut Frame, app: &mut App, area: Rect) {
     let filas: Vec<Row> = lista
         .iter()
         .map(|p| {
-            let mem_pct = pct(p.memoria, total_ram);
+            let mem_pct = pct(p.memory, total_ram);
             let (dir, prog, args) = partes_comando(p);
             Row::new(vec![
                 Cell::from(p.pid.to_string()).style(Style::new().fg(tema().muted)),
-                Cell::from(p.usuario.clone()).style(Style::new().fg(Color::Gray)),
+                Cell::from(p.user.clone()).style(Style::new().fg(Color::Gray)),
                 Cell::from(format!("{:5.1}", p.cpu))
                     .style(Style::new().fg(color_pct(p.cpu as f64))),
                 Cell::from(format!("{mem_pct:5.1}"))
                     .style(Style::new().fg(color_pct(mem_pct * 3.0))),
-                Cell::from(fmt_bytes(p.memoria)),
-                Cell::from(estado_proceso(p.estado)).style(Style::new().fg(Color::Gray)),
-                Cell::from(fmt_tiempo(p.tiempo)).style(Style::new().fg(Color::Gray)),
+                Cell::from(fmt_bytes(p.memory)),
+                Cell::from(estado_proceso(p.state)).style(Style::new().fg(Color::Gray)),
+                Cell::from(fmt_tiempo(p.cpu_time)).style(Style::new().fg(Color::Gray)),
                 Cell::from(Line::from(vec![
                     Span::styled(dir, Style::new().fg(tema().muted)),
                     Span::styled(prog, Style::new().add_modifier(Modifier::BOLD)),

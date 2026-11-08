@@ -9,7 +9,6 @@ use serde::Deserialize;
 
 use crate::{
     config::Config,
-    foto::Fotos,
     gpu, i18n,
     sistema::{ErrorSenal, Monitor, Proceso},
 };
@@ -91,7 +90,6 @@ pub enum Modo {
 pub struct App {
     /// Datos del sistema; se refrescan en cada [`App::tick`].
     pub monitor: Monitor,
-    pub fotos: Fotos,
     pub pestana: Pestana,
     pub modo: Modo,
     pub pausado: bool,
@@ -102,6 +100,8 @@ pub struct App {
     pub desc: bool,
     pub busqueda: String,
     pub solo_mios: bool,
+    /// Mostrar el logo encima del panel Sistema (`logo` en la configuración).
+    pub logo: bool,
     sel_pid: Option<u32>,
 
     pub mensaje: Option<(String, bool, Instant)>,
@@ -109,11 +109,10 @@ pub struct App {
 
 impl App {
     /// Crea el estado inicial con la pestaña, el orden y el filtro de la configuración.
-    pub fn new(monitor: Monitor, fotos: Fotos, config: &Config) -> Self {
+    pub fn new(monitor: Monitor, config: &Config) -> Self {
         let orden = config.procesos.orden;
         let mut app = Self {
             monitor,
-            fotos,
             pestana: Pestana::Resumen,
             modo: Modo::Normal,
             pausado: false,
@@ -123,6 +122,7 @@ impl App {
             desc: orden.descendente_por_defecto(),
             busqueda: String::new(),
             solo_mios: config.procesos.solo_mios,
+            logo: config.logo,
             sel_pid: None,
             mensaje: None,
         };
@@ -321,7 +321,6 @@ impl App {
                 self.ir_a(Pestana::TODAS[(i + n - 1) % n])
             }
             KeyCode::Char(c @ '1'..='7') => self.ir_a(Pestana::TODAS[c as usize - '1' as usize]),
-            KeyCode::Char('f') => self.fotos.siguiente(),
             KeyCode::Char(' ') => self.pausado = !self.pausado,
             _ if self.pestana == Pestana::Procesos => self.tecla_procesos(k),
             _ => {}

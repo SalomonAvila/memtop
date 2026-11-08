@@ -35,10 +35,15 @@ pub struct Config {
     /// Segundos entre actualizaciones.
     pub intervalo: f64,
     pub pestana_inicial: Pestana,
-    /// Mostrar un Pokémon al azar si `pokemon-colorscripts` está instalado.
-    pub pokemon: bool,
+    /// Mostrar el logo de memtop encima del panel Sistema. Sin él, Sistema ocupa toda la
+    /// columna izquierda.
+    pub logo: bool,
     pub procesos: Procesos,
     pub colores: Tema,
+    /// Clave obsoleta desde que se quitó el panel del Pokémon. Se acepta y se ignora para
+    /// que los archivos antiguos sigan funcionando.
+    #[serde(rename = "pokemon")]
+    _pokemon: Option<bool>,
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
@@ -68,9 +73,10 @@ impl Default for Config {
             idioma: Preferencia::Auto,
             intervalo: 1.0,
             pestana_inicial: Pestana::Resumen,
-            pokemon: true,
+            logo: false,
             procesos: Procesos::default(),
             colores: Tema::default(),
+            _pokemon: None,
         }
     }
 }
@@ -174,7 +180,7 @@ mod tests {
             idioma = "en"
             intervalo = 2.5
             pestana_inicial = "procesos"
-            pokemon = false
+            logo = true
             [procesos]
             orden = "memoria"
             solo_mios = true
@@ -189,7 +195,7 @@ mod tests {
         assert_eq!(c.idioma, Preferencia::En);
         assert_eq!(c.intervalo(), Duration::from_millis(2500));
         assert_eq!(c.pestana_inicial, Pestana::Procesos);
-        assert!(!c.pokemon);
+        assert!(c.logo);
         assert_eq!(c.procesos.orden, OrdenProc::Memoria);
         assert!(c.procesos.solo_mios);
         assert_eq!(c.colores.acento, Color::LightMagenta);
@@ -207,10 +213,17 @@ mod tests {
     }
 
     #[test]
+    fn la_clave_obsoleta_pokemon_se_acepta_y_se_ignora() {
+        let c = interpretar("pokemon = false\nintervalo = 2.0").unwrap();
+        assert_eq!(c.intervalo, 2.0);
+        assert!(interpretar("pokemon = true").is_ok());
+    }
+
+    #[test]
     fn rechaza_claves_desconocidas() {
         let e = interpretar("intervalos = 2").unwrap_err().to_string();
         assert!(e.contains("intervalos"), "{e}");
-        assert!(interpretar("pokemn = false").is_err());
+        assert!(interpretar("intervalo_ = 1.0").is_err());
         assert!(interpretar("[procesos]\nsolo_mio = true").is_err());
     }
 
@@ -229,7 +242,7 @@ mod tests {
 
     #[test]
     fn los_errores_indican_la_linea() {
-        let e = interpretar("intervalo = 1.0\nidioma = \"es\"\npokemon = si\n")
+        let e = interpretar("intervalo = 1.0\nidioma = \"es\"\npestana_inicial = si\n")
             .unwrap_err()
             .to_string();
         assert!(e.contains('3'), "{e}");

@@ -3,7 +3,7 @@
 //! Estructura:
 //! - [`sistema`]: lectura de CPU, memoria, discos, red, procesos, sensores y batería.
 //! - [`gpu`] y [`pci`]: detección de GPUs y sus nombres comerciales.
-//! - [`foto`]: panel del Pokémon (o el logo) en pixel art.
+//! - [`logo`]: logo de memtop en pixel art para el panel izquierdo.
 //! - [`config`]: archivo de configuración.
 //! - [`i18n`]: idioma de la interfaz y textos traducidos.
 //! - [`app`]: estado de la interfaz y manejo de teclas.
@@ -11,9 +11,9 @@
 
 mod app;
 mod config;
-mod foto;
 mod gpu;
 mod i18n;
+mod logo;
 mod pci;
 mod sistema;
 mod ui;
@@ -42,7 +42,6 @@ USO:
     memtop [OPCIONES]
 
 OPCIONES:
-    --sin-pokemon           No mostrar Pokémon aunque pokemon-colorscripts esté instalado
     -i, --intervalo SEG     Segundos entre actualizaciones (mínimo 0.2)
     --idioma IDIOMA         Idioma de la interfaz: auto (según LANG), es o en
     -c, --config RUTA       Usar este archivo de configuración
@@ -63,7 +62,6 @@ Dentro de memtop pulsa ? para ver todas las teclas.
 #[derive(Debug, Default, PartialEq)]
 struct Opciones {
     config: Option<PathBuf>,
-    pokemon: Option<bool>,
     intervalo: Option<f64>,
     idioma: Option<i18n::Preferencia>,
 }
@@ -73,9 +71,6 @@ impl Opciones {
     fn aplicar(self, mut c: Config) -> Config {
         if let Some(i) = self.intervalo {
             c.intervalo = i;
-        }
-        if let Some(p) = self.pokemon {
-            c.pokemon = p;
         }
         if let Some(i) = self.idioma {
             c.idioma = i;
@@ -114,7 +109,9 @@ fn leer_opciones(args: impl IntoIterator<Item = String>) -> Result<Accion, Strin
                     .map_err(|_| format!("--idioma no admite {v:?}: usa auto, es o en"))?;
                 o.idioma = Some(i);
             }
-            "--sin-pokemon" => o.pokemon = Some(false),
+            // Obsoleta desde que se quitó el panel del Pokémon: se acepta y no hace nada
+            // para no romper alias ni scripts que aún la usen.
+            "--sin-pokemon" => {}
             "-i" | "--intervalo" => {
                 let s: f64 = args
                     .next()
@@ -181,8 +178,7 @@ fn iniciar(config: Config) -> Result<()> {
     // `ratatui::init` activa el modo raw y la pantalla alternativa, e instala un hook
     // que restaura la terminal si el programa entra en pánico.
     let mut terminal = ratatui::init();
-    let fotos = foto::Fotos::new(config.pokemon);
-    let app = App::new(monitor, fotos, &config);
+    let app = App::new(monitor, &config);
     let resultado = ejecutar(&mut terminal, app, config.intervalo());
     ratatui::restore();
     resultado
@@ -233,34 +229,28 @@ mod tests {
 
     #[test]
     fn interpreta_todas_las_opciones() {
-        let o = opciones(&[
-            "--idioma",
-            "en",
-            "--sin-pokemon",
-            "-i",
-            "2,5",
-            "-c",
-            "/tmp/c.toml",
-        ]);
+        let o = opciones(&["--idioma", "en", "-i", "2,5", "-c", "/tmp/c.toml"]);
         assert_eq!(o.config, Some(PathBuf::from("/tmp/c.toml")));
         let c = o.aplicar(Config::default());
-        assert!(!c.pokemon);
         assert_eq!(c.idioma, i18n::Preferencia::En);
         assert_eq!(c.intervalo(), Duration::from_millis(2500));
     }
 
     #[test]
     fn las_opciones_tienen_prioridad_sobre_el_archivo() {
-        let archivo = config::interpretar(
-            "idioma = \"es\"\nintervalo = 5.0\npokemon = true\npestana_inicial = \"red\"",
-        )
-        .unwrap();
-        let c = opciones(&["-i", "2", "--sin-pokemon", "--idioma", "en"]).aplicar(archivo);
+        let archivo =
+            config::interpretar("idioma = \"es\"\nintervalo = 5.0\npestana_inicial = \"red\"")
+                .unwrap();
+        let c = opciones(&["-i", "2", "--idioma", "en"]).aplicar(archivo);
         assert_eq!(c.intervalo, 2.0);
-        assert!(!c.pokemon);
         assert_eq!(c.idioma, i18n::Preferencia::En);
         // Lo que no se indicó en la línea de comandos sale del archivo.
         assert_eq!(c.pestana_inicial, app::Pestana::Red);
+    }
+
+    #[test]
+    fn la_opcion_obsoleta_sin_pokemon_se_acepta_y_no_hace_nada() {
+        assert_eq!(opciones(&["--sin-pokemon"]), Opciones::default());
     }
 
     #[test]

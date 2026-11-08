@@ -7,7 +7,7 @@
 #
 # Todas las claves son opcionales: las que borres o dejes comentadas usan el valor por
 # defecto que aparece aquí. Las opciones de la línea de comandos (--intervalo,
-# --sin-pokemon, --idioma) tienen prioridad sobre este archivo.
+# --idioma) tienen prioridad sobre este archivo.
 
 # Idioma de la interfaz: "auto" (según LANG y similares), "es" o "en".
 idioma = "auto"
@@ -19,9 +19,9 @@ intervalo = 1.0
 # "resumen", "cpu", "ram", "almacenamiento", "gpu", "red" o "procesos".
 pestana_inicial = "resumen"
 
-# Mostrar un Pokémon al azar en el panel izquierdo si pokemon-colorscripts está
-# instalado. Si no, se muestra el logo de memtop.
-pokemon = true
+# Mostrar el logo de memtop encima del panel Sistema. Con false, Sistema ocupa toda la
+# columna izquierda.
+logo = false
 
 [procesos]
 # Columna de orden inicial: "cpu", "memoria", "pid", "nombre" o "usuario".

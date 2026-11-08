@@ -1,11 +1,14 @@
 //! Dibujo de la interfaz con ratatui.
 //!
-//! La pantalla se divide en: barra de pestañas (arriba), panel del Pokémon y resumen del
-//! sistema (izquierda), contenido de la pestaña activa (derecha) y atajos de teclado (abajo).
+//! La pantalla se divide en: barra de pestañas (arriba), resumen del sistema (izquierda,
+//! con el logo encima si se activó en la configuración), contenido de la pestaña activa (derecha) y atajos de teclado (abajo).
 //! Todas las funciones son de solo lectura sobre [`App`], salvo el estado de selección
 //! de las tablas, que ratatui necesita mutable.
 
-use std::{collections::VecDeque, sync::OnceLock};
+use std::{
+    collections::VecDeque,
+    sync::{LazyLock, OnceLock},
+};
 
 use ratatui::{
     Frame,
@@ -21,8 +24,8 @@ use ratatui::{
 use crate::{
     app::{App, Modo, OrdenProc, Pestana},
     config::Tema,
-    foto::Contenido,
     i18n,
+    logo::Sprite,
     sistema::{
         EstadoBateria, EstadoProceso, HISTORIAL, Proceso, Temperatura, fmt_bytes, fmt_duracion,
         fmt_tasa,
@@ -181,10 +184,16 @@ pub fn dibujar(f: &mut Frame, app: &mut App) {
         Layout::horizontal([Constraint::Length(ancho_izq), Constraint::Min(30)]).areas(cuerpo);
 
     let lineas_sis = panel_sistema(app);
-    let alto_sis = (lineas_sis.len() as u16 + 2).min(izq.height.saturating_sub(6));
-    let [foto, sis] =
-        Layout::vertical([Constraint::Min(6), Constraint::Length(alto_sis)]).areas(izq);
-    dibujar_foto(f, app, foto);
+    // Sin logo, el panel Sistema ocupa toda la columna izquierda.
+    let sis = if app.logo {
+        let alto_sis = (lineas_sis.len() as u16 + 2).min(izq.height.saturating_sub(6));
+        let [logo, sis] =
+            Layout::vertical([Constraint::Min(6), Constraint::Length(alto_sis)]).areas(izq);
+        dibujar_logo(f, logo);
+        sis
+    } else {
+        izq
+    };
     f.render_widget(
         Paragraph::new(lineas_sis).block(bloque(marco(i18n::t().titulo_sistema))),
         sis,
@@ -256,43 +265,17 @@ fn dibujar_pestanas(f: &mut Frame, app: &App, area: Rect) {
     f.render_widget(tabs, area);
 }
 
-fn texto_centrado(f: &mut Frame, inner: Rect, texto: String, color: Color) {
-    let alto = texto.lines().count() as u16 + 1;
-    let y = inner.y + inner.height.saturating_sub(alto) / 2;
-    f.render_widget(
-        Paragraph::new(texto)
-            .alignment(Alignment::Center)
-            .style(Style::new().fg(color))
-            .wrap(Wrap { trim: true }),
-        Rect {
-            y,
-            height: inner.height - (y - inner.y),
-            ..inner
-        },
-    );
-}
-
-fn dibujar_foto(f: &mut Frame, app: &mut App, area: Rect) {
-    let t = i18n::t();
-    let mut block = bloque(app.fotos.titulo.clone());
-    if app.fotos.hay_pokemon() {
-        block = block.title_bottom(
-            Line::styled(marco(t.foto_otra), Style::new().fg(tema().tenue))
-                .alignment(Alignment::Right),
-        );
-    }
+fn dibujar_logo(f: &mut Frame, area: Rect) {
+    static LOGO: LazyLock<Sprite> = LazyLock::new(Sprite::logo);
+    let block = bloque(" memtop ");
     let inner = block.inner(area);
     f.render_widget(block, area);
-
-    match &app.fotos.actual {
-        Contenido::Error(e) => texto_centrado(f, inner, e.clone(), Color::Red),
-        Contenido::Pixeles(sp) => dibujar_sprite(f, sp, inner),
-    }
+    dibujar_sprite(f, &LOGO, inner);
 }
 
 /// Dibuja el sprite escalado (vecino más cercano) y centrado en `area`,
 /// usando `▀`/`▄` para meter dos píxeles por celda.
-fn dibujar_sprite(f: &mut Frame, sp: &crate::foto::Sprite, area: Rect) {
+fn dibujar_sprite(f: &mut Frame, sp: &Sprite, area: Rect) {
     let s = sp.escala(area.width, area.height);
     if s <= 0.0 {
         return;
@@ -1258,7 +1241,6 @@ fn dibujar_pie(f: &mut Frame, app: &App, area: Rect) {
         _ => &[
             ("←→/Tab", t.pie_pestana),
             ("1-7", t.pie_ir_a),
-            ("f", t.pie_otra_foto),
             (t.tecla_espacio, t.pie_pausa),
             ("?", t.pie_ayuda),
             ("q", t.pie_salir),
@@ -1327,7 +1309,6 @@ fn dibujar_ayuda(f: &mut Frame) {
             &[
                 ("← → / Tab / h l", t.ayuda_cambiar_pestana),
                 ("1 … 7", t.ayuda_ir_pestana),
-                ("f", t.ayuda_foto),
                 (t.tecla_espacio, t.ayuda_pausa),
                 ("q / Esc", t.ayuda_salir),
             ],

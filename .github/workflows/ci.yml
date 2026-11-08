@@ -55,7 +55,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        fedora: ["43", "44"]
+        fedora: ["43", "44", "45"]
     steps:
       # git before checkout: without it, actions/checkout downloads the code without the
       # repository and git archive (in .copr/Makefile) does not work.

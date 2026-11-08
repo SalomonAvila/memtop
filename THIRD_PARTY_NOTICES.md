@@ -1,10 +1,10 @@
-# Avisos de terceros
+# Third-party notices
 
 ## pci.ids
 
-`data/pci-gpu.ids` es un extracto de la base de identificadores PCI del
-[PCI ID Project](https://pci-ids.ucw.cz), que se incluye dentro del binario de memtop.
-La base se distribuye bajo GPL-2.0-or-later o BSD-3-Clause; memtop la usa bajo
+`data/pci-gpu.ids` is an extract of the PCI identifier database from the
+[PCI ID Project](https://pci-ids.ucw.cz), which is embedded in the memtop binary.
+The database is distributed under GPL-2.0-or-later or BSD-3-Clause; memtop uses it under
 BSD-3-Clause:
 
 ```
@@ -36,13 +36,13 @@ ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
-## Crates de Rust
+## Rust crates
 
-memtop se compila con crates de [crates.io](https://crates.io) publicados bajo licencias
-permisivas: MIT, Apache-2.0, BSD-2-Clause, BSD-3-Clause, Zlib, Unicode-3.0 y similares.
-Las pocas que ofrecen también GPL o MPL tienen siempre una alternativa MIT o Apache-2.0,
-que es la que aplica. La lista exacta de versiones está en
-`Cargo.lock`; la licencia de cada una puede consultarse con:
+memtop is built with crates from [crates.io](https://crates.io) published under permissive
+licenses: MIT, Apache-2.0, BSD-2-Clause, BSD-3-Clause, Zlib, Unicode-3.0 and similar.
+The few that also offer GPL or MPL always have an MIT or Apache-2.0 alternative, which is
+the one that applies. The exact list of versions is in `Cargo.lock`; the license of each
+one can be checked with:
 
 ```sh
 cargo install cargo-license

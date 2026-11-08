@@ -1,9 +1,8 @@
-//! Archivo de configuración (`$XDG_CONFIG_HOME/memtop/config.toml`).
+//! Configuration file (`$XDG_CONFIG_HOME/memtop/config.toml`).
 //!
-//! Orden de prioridad: valores por defecto < archivo de configuración < opciones de la
-//! línea de comandos. Todas las claves son opcionales; las desconocidas se rechazan para
-//! que una errata no se ignore en silencio. La plantilla documentada está en
-//! `config.ejemplo.toml` (también disponible con `memtop --config-ejemplo`).
+//! Precedence: defaults < configuration file < command-line options. Every key is optional;
+//! unknown ones are rejected so a typo is not silently ignored. The documented template is
+//! `config.example.toml` (also available with `memtop --print-config`).
 
 use std::{
     env, fs,
@@ -17,108 +16,112 @@ use ratatui::style::Color;
 use serde::{Deserialize, Deserializer, de};
 
 use crate::{
-    app::{OrdenProc, Pestana},
-    i18n::Preferencia,
+    app::{ProcessSort, Tab},
+    i18n::{self, LanguageSetting},
 };
 
-/// Plantilla documentada; coincide con los valores por defecto (lo comprueba una prueba).
-pub const EJEMPLO: &str = include_str!("../config.ejemplo.toml");
+/// Documented template; it matches the defaults (a test checks it).
+pub const EXAMPLE: &str = include_str!("../config.example.toml");
 
-/// Intervalo mínimo entre actualizaciones, en segundos.
-pub const INTERVALO_MINIMO: f64 = 0.2;
+/// Minimum interval between refreshes, in seconds.
+pub const MIN_INTERVAL: f64 = 0.2;
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct Config {
-    /// Idioma de la interfaz.
-    pub idioma: Preferencia,
-    /// Segundos entre actualizaciones.
-    pub intervalo: f64,
-    pub pestana_inicial: Pestana,
-    /// Mostrar un Pokémon al azar si `pokemon-colorscripts` está instalado.
-    pub pokemon: bool,
-    pub procesos: Procesos,
-    pub colores: Tema,
+    /// Interface language.
+    pub language: LanguageSetting,
+    /// Seconds between refreshes.
+    pub interval: f64,
+    pub start_tab: Tab,
+    /// Show the memtop logo above the System panel. Without it, the System panel takes the
+    /// whole left column.
+    pub logo: bool,
+    pub processes: ProcessSettings,
+    pub colors: Theme,
 }
 
+/// `[processes]` section.
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(default, deny_unknown_fields)]
-pub struct Procesos {
-    pub orden: OrdenProc,
-    pub solo_mios: bool,
+pub struct ProcessSettings {
+    pub sort: ProcessSort,
+    pub mine_only: bool,
 }
 
-/// Colores de la interfaz.
+/// Interface colors (`[colors]` section).
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(default, deny_unknown_fields)]
-pub struct Tema {
+pub struct Theme {
     #[serde(deserialize_with = "color")]
-    pub acento: Color,
+    pub accent: Color,
     #[serde(deserialize_with = "color")]
-    pub tenue: Color,
+    pub muted: Color,
     #[serde(deserialize_with = "color")]
-    pub etiqueta: Color,
+    pub label: Color,
     #[serde(deserialize_with = "color")]
-    pub seleccion: Color,
+    pub selection: Color,
 }
 
 impl Default for Config {
     fn default() -> Self {
         Self {
-            idioma: Preferencia::Auto,
-            intervalo: 1.0,
-            pestana_inicial: Pestana::Resumen,
-            pokemon: true,
-            procesos: Procesos::default(),
-            colores: Tema::default(),
+            language: LanguageSetting::Auto,
+            interval: 1.0,
+            start_tab: Tab::Summary,
+            logo: false,
+            processes: ProcessSettings::default(),
+            colors: Theme::default(),
         }
     }
 }
 
-impl Default for Procesos {
+impl Default for ProcessSettings {
     fn default() -> Self {
         Self {
-            orden: OrdenProc::Cpu,
-            solo_mios: false,
+            sort: ProcessSort::Cpu,
+            mine_only: false,
         }
     }
 }
 
-impl Default for Tema {
+impl Default for Theme {
     fn default() -> Self {
         Self {
-            acento: Color::Cyan,
-            tenue: Color::DarkGray,
-            etiqueta: Color::LightBlue,
-            seleccion: Color::Rgb(0x23, 0x37, 0x55),
+            accent: Color::Cyan,
+            muted: Color::DarkGray,
+            label: Color::LightBlue,
+            selection: Color::Rgb(0x23, 0x37, 0x55),
         }
     }
 }
 
 impl Config {
-    pub fn intervalo(&self) -> Duration {
-        Duration::from_secs_f64(self.intervalo)
+    pub fn refresh_interval(&self) -> Duration {
+        Duration::from_secs_f64(self.interval)
     }
 
-    fn validar(self) -> Result<Self> {
-        if !self.intervalo.is_finite() || self.intervalo < INTERVALO_MINIMO {
-            bail!("intervalo debe ser un número de segundos mayor o igual que {INTERVALO_MINIMO}");
+    fn validate(self) -> Result<Self> {
+        if !self.interval.is_finite() || self.interval < MIN_INTERVAL {
+            bail!("{} {MIN_INTERVAL}", i18n::t().config_min_interval);
         }
         Ok(self)
     }
 }
 
 fn color<'de, D: Deserializer<'de>>(d: D) -> Result<Color, D::Error> {
-    let texto = String::deserialize(d)?;
-    texto.parse().map_err(|_| {
+    let text = String::deserialize(d)?;
+    text.parse().map_err(|_| {
+        let t = i18n::t();
         de::Error::custom(format!(
-            "color no válido: {texto:?} (usa un nombre como \"cyan\", \"#rrggbb\" o un número de 0 a 255)"
+            "{}: {text:?} ({})",
+            t.config_invalid_color, t.config_color_formats
         ))
     })
 }
 
-/// Carpeta de configuración de memtop: `$XDG_CONFIG_HOME/memtop` o `~/.config/memtop`.
-pub fn carpeta() -> PathBuf {
+/// memtop's configuration directory: `$XDG_CONFIG_HOME/memtop` or `~/.config/memtop`.
+pub fn dir() -> PathBuf {
     env::var_os("XDG_CONFIG_HOME")
         .filter(|v| !v.is_empty())
         .map(PathBuf::from)
@@ -126,31 +129,35 @@ pub fn carpeta() -> PathBuf {
         .join("memtop")
 }
 
-pub fn ruta_por_defecto() -> PathBuf {
-    carpeta().join("config.toml")
+pub fn default_path() -> PathBuf {
+    dir().join("config.toml")
 }
 
-/// Interpreta el contenido de un archivo de configuración.
-pub fn interpretar(texto: &str) -> Result<Config> {
-    let config: Config = toml::from_str(texto)?;
-    config.validar()
+/// Parses the contents of a configuration file.
+pub fn parse(text: &str) -> Result<Config> {
+    let config: Config = toml::from_str(text)?;
+    config.validate()
 }
 
-/// Carga la configuración.
+/// Loads the configuration.
 ///
-/// - Con `ruta` explícita (`--config`), el archivo debe existir.
-/// - Sin ella, se usa la ruta por defecto, y si no existe se usan los valores por defecto.
-pub fn cargar(ruta: Option<&Path>) -> Result<Config> {
-    let (ruta, obligatoria) = match ruta {
-        Some(r) => (r.to_path_buf(), true),
-        None => (ruta_por_defecto(), false),
+/// - With an explicit `path` (`--config`), the file must exist.
+/// - Without one, the default path is used, and if it does not exist the defaults apply.
+pub fn load(path: Option<&Path>) -> Result<Config> {
+    let (path, required) = match path {
+        Some(p) => (p.to_path_buf(), true),
+        None => (default_path(), false),
     };
-    let texto = match fs::read_to_string(&ruta) {
+    let text = match fs::read_to_string(&path) {
         Ok(t) => t,
-        Err(e) if e.kind() == ErrorKind::NotFound && !obligatoria => return Ok(Config::default()),
-        Err(e) => return Err(e).with_context(|| format!("no se pudo leer {}", ruta.display())),
+        Err(e) if e.kind() == ErrorKind::NotFound && !required => return Ok(Config::default()),
+        Err(e) => {
+            return Err(e).with_context(|| {
+                format!("{} {}", i18n::t().config_could_not_read, path.display())
+            });
+        }
     };
-    interpretar(&texto).with_context(|| format!("error en {}", ruta.display()))
+    parse(&text).with_context(|| format!("{} {}", i18n::t().config_error_in, path.display()))
 }
 
 #[cfg(test)]
@@ -158,86 +165,125 @@ mod tests {
     use super::*;
 
     #[test]
-    fn la_plantilla_coincide_con_los_valores_por_defecto() {
-        assert_eq!(interpretar(EJEMPLO).unwrap(), Config::default());
+    fn template_matches_the_defaults() {
+        assert_eq!(parse(EXAMPLE).unwrap(), Config::default());
     }
 
     #[test]
-    fn un_archivo_vacio_usa_los_valores_por_defecto() {
-        assert_eq!(interpretar("").unwrap(), Config::default());
+    fn empty_file_uses_the_defaults() {
+        assert_eq!(parse("").unwrap(), Config::default());
     }
 
     #[test]
-    fn lee_todas_las_claves() {
-        let c = interpretar(
+    fn reads_every_key() {
+        let c = parse(
             r##"
-            idioma = "en"
-            intervalo = 2.5
-            pestana_inicial = "procesos"
-            pokemon = false
-            [procesos]
-            orden = "memoria"
-            solo_mios = true
-            [colores]
-            acento = "light-magenta"
-            tenue = "244"
-            etiqueta = "#ff8800"
-            seleccion = "blue"
+            language = "en"
+            interval = 2.5
+            start_tab = "processes"
+            logo = true
+            [processes]
+            sort = "memory"
+            mine_only = true
+            [colors]
+            accent = "light-magenta"
+            muted = "244"
+            label = "#ff8800"
+            selection = "blue"
             "##,
         )
         .unwrap();
-        assert_eq!(c.idioma, Preferencia::En);
-        assert_eq!(c.intervalo(), Duration::from_millis(2500));
-        assert_eq!(c.pestana_inicial, Pestana::Procesos);
-        assert!(!c.pokemon);
-        assert_eq!(c.procesos.orden, OrdenProc::Memoria);
-        assert!(c.procesos.solo_mios);
-        assert_eq!(c.colores.acento, Color::LightMagenta);
-        assert_eq!(c.colores.tenue, Color::Indexed(244));
-        assert_eq!(c.colores.etiqueta, Color::Rgb(0xff, 0x88, 0x00));
-        assert_eq!(c.colores.seleccion, Color::Blue);
+        assert_eq!(c.language, LanguageSetting::En);
+        assert_eq!(c.refresh_interval(), Duration::from_millis(2500));
+        assert_eq!(c.start_tab, Tab::Processes);
+        assert!(c.logo);
+        assert_eq!(c.processes.sort, ProcessSort::Memory);
+        assert!(c.processes.mine_only);
+        assert_eq!(c.colors.accent, Color::LightMagenta);
+        assert_eq!(c.colors.muted, Color::Indexed(244));
+        assert_eq!(c.colors.label, Color::Rgb(0xff, 0x88, 0x00));
+        assert_eq!(c.colors.selection, Color::Blue);
     }
 
     #[test]
-    fn las_secciones_parciales_conservan_el_resto() {
-        let c = interpretar("[colores]\nacento = \"green\"").unwrap();
-        assert_eq!(c.colores.acento, Color::Green);
-        assert_eq!(c.colores.tenue, Tema::default().tenue);
-        assert_eq!(c.intervalo, 1.0);
+    fn accepts_every_tab_and_sort_value() {
+        for (value, tab) in [
+            ("summary", Tab::Summary),
+            ("cpu", Tab::Cpu),
+            ("ram", Tab::Ram),
+            ("storage", Tab::Storage),
+            ("gpu", Tab::Gpu),
+            ("network", Tab::Network),
+            ("processes", Tab::Processes),
+        ] {
+            let c = parse(&format!("start_tab = \"{value}\"")).unwrap();
+            assert_eq!(c.start_tab, tab, "{value}");
+        }
+        for (value, sort) in [
+            ("cpu", ProcessSort::Cpu),
+            ("memory", ProcessSort::Memory),
+            ("pid", ProcessSort::Pid),
+            ("name", ProcessSort::Name),
+            ("user", ProcessSort::User),
+        ] {
+            let c = parse(&format!("[processes]\nsort = \"{value}\"")).unwrap();
+            assert_eq!(c.processes.sort, sort, "{value}");
+        }
     }
 
     #[test]
-    fn rechaza_claves_desconocidas() {
-        let e = interpretar("intervalos = 2").unwrap_err().to_string();
-        assert!(e.contains("intervalos"), "{e}");
-        assert!(interpretar("pokemn = false").is_err());
-        assert!(interpretar("[procesos]\nsolo_mio = true").is_err());
+    fn partial_sections_keep_the_rest() {
+        let c = parse("[colors]\naccent = \"green\"").unwrap();
+        assert_eq!(c.colors.accent, Color::Green);
+        assert_eq!(c.colors.muted, Theme::default().muted);
+        assert_eq!(c.interval, 1.0);
     }
 
     #[test]
-    fn rechaza_valores_invalidos() {
-        assert!(interpretar("intervalo = 0.1").is_err());
-        assert!(interpretar("idioma = \"fr\"").is_err());
-        assert!(interpretar("intervalo = \"1\"").is_err());
-        assert!(interpretar("pestana_inicial = \"inicio\"").is_err());
-        assert!(interpretar("[procesos]\norden = \"tamaño\"").is_err());
-        let e = interpretar("[colores]\nacento = \"azulito\"")
+    fn rejects_the_old_spanish_keys() {
+        for old in [
+            "idioma = \"es\"",
+            "intervalo = 2.0",
+            "pestana_inicial = \"cpu\"",
+            "pokemon = true",
+            "[procesos]\norden = \"cpu\"",
+            "[colores]\nacento = \"green\"",
+        ] {
+            assert!(parse(old).is_err(), "{old}");
+        }
+    }
+
+    #[test]
+    fn rejects_unknown_keys() {
+        let e = parse("intervals = 2").unwrap_err().to_string();
+        assert!(e.contains("intervals"), "{e}");
+        assert!(parse("[processes]\nmine = true").is_err());
+    }
+
+    #[test]
+    fn rejects_invalid_values() {
+        assert!(parse("interval = 0.1").is_err());
+        assert!(parse("language = \"fr\"").is_err());
+        assert!(parse("interval = \"1\"").is_err());
+        assert!(parse("start_tab = \"resumen\"").is_err());
+        assert!(parse("[processes]\nsort = \"memoria\"").is_err());
+        let e = parse("[colors]\naccent = \"azulito\"")
             .unwrap_err()
             .to_string();
         assert!(e.contains("azulito"), "{e}");
     }
 
     #[test]
-    fn los_errores_indican_la_linea() {
-        let e = interpretar("intervalo = 1.0\nidioma = \"es\"\npokemon = si\n")
+    fn errors_point_to_the_line() {
+        let e = parse("interval = 1.0\nlanguage = \"es\"\nstart_tab = si\n")
             .unwrap_err()
             .to_string();
         assert!(e.contains('3'), "{e}");
     }
 
     #[test]
-    fn una_ruta_explicita_inexistente_es_un_error() {
-        let inexistente = Path::new("/nonexistent/memtop/config.toml");
-        assert!(cargar(Some(inexistente)).is_err());
+    fn missing_explicit_path_is_an_error() {
+        let missing = Path::new("/nonexistent/memtop/config.toml");
+        assert!(load(Some(missing)).is_err());
     }
 }

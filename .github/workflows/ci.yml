@@ -12,8 +12,8 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  comprobar:
-    name: Formato, lint y pruebas
+  check:
+    name: Format, lint and tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -25,8 +25,8 @@ jobs:
       - run: cargo clippy --all-targets --locked -- -D warnings
       - run: cargo test --locked
 
-  estatico:
-    name: Binario estático (${{ matrix.target }})
+  static:
+    name: Static binary (${{ matrix.target }})
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -46,8 +46,8 @@ jobs:
       - run: cargo build --release --locked --target ${{ matrix.target }}
       - run: ./target/${{ matrix.target }}/release/memtop --version
 
-  # Compila el RPM igual que COPR (.copr/Makefile + packaging/memtop.spec) para detectar
-  # un .spec roto antes de publicar.
+  # Builds the RPM the same way COPR does (.copr/Makefile + packaging/memtop.spec) to catch
+  # a broken .spec before publishing.
   rpm:
     name: RPM (Fedora ${{ matrix.fedora }})
     runs-on: ubuntu-latest
@@ -55,19 +55,19 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        fedora: ["43", "44"]
+        fedora: ["43", "44", "45"]
     steps:
-      # git antes del checkout: sin él, actions/checkout baja el código sin el
-      # repositorio y git archive (en .copr/Makefile) no funciona.
+      # git before checkout: without it, actions/checkout downloads the code without the
+      # repository and git archive (in .copr/Makefile) does not work.
       - run: dnf -y install git-core make
       - uses: actions/checkout@v4
-      - name: Generar el SRPM
+      - name: Build the SRPM
         run: make -f .copr/Makefile srpm outdir="$PWD/rpm" spec="$PWD/packaging/memtop.spec"
-      - name: Instalar las dependencias de compilación
+      - name: Install build dependencies
         run: dnf -y builddep rpm/*.src.rpm
-      - name: Compilar el RPM
+      - name: Build the RPM
         run: rpmbuild --rebuild --define "_rpmdir $PWD/rpm" rpm/*.src.rpm
-      - name: Instalar y probar el paquete
+      - name: Install and test the package
         run: |
           dnf -y install rpm/*/memtop-[0-9]*.rpm
           rpm -qil memtop

@@ -1,83 +1,83 @@
-//! Nombres de GPU a partir de sus identificadores PCI, sin depender de `lspci`.
+//! GPU names from their PCI identifiers, without depending on `lspci`.
 //!
-//! El binario incluye `data/pci-gpu.ids`, un extracto de la base pública
-//! [pci.ids](https://pci-ids.ucw.cz) con solo los fabricantes de gráficas. Se
-//! regenera con `scripts/actualizar-pci-ids.sh`.
+//! The binary embeds `data/pci-gpu.ids`, an extract of the public
+//! [pci.ids](https://pci-ids.ucw.cz) database with only the graphics vendors. It is
+//! regenerated with `scripts/update-pci-ids.sh`.
 
 use std::{collections::HashMap, sync::OnceLock};
 
-const BASE: &str = include_str!("../data/pci-gpu.ids");
+const DATABASE: &str = include_str!("../data/pci-gpu.ids");
 
-struct Fabricante {
-    nombre: &'static str,
-    dispositivos: HashMap<u16, &'static str>,
+struct Vendor {
+    name: &'static str,
+    devices: HashMap<u16, &'static str>,
 }
 
-fn base() -> &'static HashMap<u16, Fabricante> {
-    static BASE_PCI: OnceLock<HashMap<u16, Fabricante>> = OnceLock::new();
-    BASE_PCI.get_or_init(|| interpretar(BASE))
+fn database() -> &'static HashMap<u16, Vendor> {
+    static PCI_DATABASE: OnceLock<HashMap<u16, Vendor>> = OnceLock::new();
+    PCI_DATABASE.get_or_init(|| parse(DATABASE))
 }
 
-/// Interpreta el formato de pci.ids:
+/// Parses the pci.ids format:
 ///
 /// ```text
 /// 10de  NVIDIA Corporation
 /// <TAB>2504  GA106 [GeForce RTX 3060 Lite Hash Rate]
 /// ```
-fn interpretar(texto: &'static str) -> HashMap<u16, Fabricante> {
-    let mut mapa: HashMap<u16, Fabricante> = HashMap::new();
-    let mut actual: Option<u16> = None;
-    for linea in texto.lines() {
-        if linea.starts_with('#') || linea.trim().is_empty() || linea.starts_with("\t\t") {
+fn parse(text: &'static str) -> HashMap<u16, Vendor> {
+    let mut map: HashMap<u16, Vendor> = HashMap::new();
+    let mut current: Option<u16> = None;
+    for line in text.lines() {
+        if line.starts_with('#') || line.trim().is_empty() || line.starts_with("\t\t") {
             continue;
         }
-        let (dispositivo, resto) = match linea.strip_prefix('\t') {
+        let (is_device, rest) = match line.strip_prefix('\t') {
             Some(r) => (true, r),
-            None => (false, linea),
+            None => (false, line),
         };
-        let Some((id, nombre)) = resto.split_once("  ") else {
+        let Some((id, name)) = rest.split_once("  ") else {
             continue;
         };
         let Ok(id) = u16::from_str_radix(id.trim(), 16) else {
             continue;
         };
-        let nombre = nombre.trim();
-        if dispositivo {
-            if let Some(f) = actual.and_then(|v| mapa.get_mut(&v)) {
-                f.dispositivos.insert(id, nombre);
+        let name = name.trim();
+        if is_device {
+            if let Some(v) = current.and_then(|v| map.get_mut(&v)) {
+                v.devices.insert(id, name);
             }
         } else {
-            actual = Some(id);
-            mapa.insert(
+            current = Some(id);
+            map.insert(
                 id,
-                Fabricante {
-                    nombre,
-                    dispositivos: HashMap::new(),
+                Vendor {
+                    name,
+                    devices: HashMap::new(),
                 },
             );
         }
     }
-    mapa
+    map
 }
 
-/// Nombre corto del fabricante: `"NVIDIA Corporation"` → `"NVIDIA"`.
-pub fn fabricante(vendor: u16) -> Option<String> {
-    let nombre = base().get(&vendor)?.nombre;
-    Some(acortar_fabricante(nombre))
+/// Short vendor name: `"NVIDIA Corporation"` → `"NVIDIA"`.
+pub fn vendor_name(vendor: u16) -> Option<String> {
+    let name = database().get(&vendor)?.name;
+    Some(shorten_vendor(name))
 }
 
-/// Nombre comercial del dispositivo: `"GA106 [GeForce RTX 3060]"` → `"GeForce RTX 3060"`.
-pub fn dispositivo(vendor: u16, device: u16) -> Option<String> {
-    let nombre = base().get(&vendor)?.dispositivos.get(&device)?;
-    Some(nombre_comercial(nombre))
+/// Marketing name of the device: `"GA106 [GeForce RTX 3060]"` → `"GeForce RTX 3060"`.
+pub fn device_name(vendor: u16, device: u16) -> Option<String> {
+    let name = database().get(&vendor)?.devices.get(&device)?;
+    Some(marketing_name(name))
 }
 
-fn acortar_fabricante(nombre: &str) -> String {
-    if nombre.contains("AMD") || nombre.contains("ATI") {
+fn shorten_vendor(name: &str) -> String {
+    if name.contains("AMD") || name.contains("ATI") {
         return "AMD".into();
     }
-    let mut n = nombre.to_string();
-    for sufijo in [
+    let mut n = name.to_string();
+    for suffix in [
         " Corporation",
         " Corp.",
         ", Inc.",
@@ -85,22 +85,22 @@ fn acortar_fabricante(nombre: &str) -> String {
         " Ltd.",
         " Technology",
     ] {
-        n = n.replace(sufijo, "");
+        n = n.replace(suffix, "");
     }
     n.trim().to_string()
 }
 
-/// Lo que va entre corchetes es el nombre de venta; fuera, el nombre en clave del chip.
-fn nombre_comercial(nombre: &str) -> String {
-    match (nombre.find('['), nombre.rfind(']')) {
-        (Some(a), Some(b)) if b > a + 1 => nombre[a + 1..b].to_string(),
-        _ => nombre.to_string(),
+/// The part in brackets is the retail name; outside them, the chip's code name.
+fn marketing_name(name: &str) -> String {
+    match (name.find('['), name.rfind(']')) {
+        (Some(a), Some(b)) if b > a + 1 => name[a + 1..b].to_string(),
+        _ => name.to_string(),
     }
 }
 
-/// Lee un identificador de `/sys` (`"0x10de"`).
-pub fn leer_hex(texto: &str) -> Option<u16> {
-    u16::from_str_radix(texto.trim().trim_start_matches("0x"), 16).ok()
+/// Parses an identifier from `/sys` (`"0x10de"`).
+pub fn parse_hex(text: &str) -> Option<u16> {
+    u16::from_str_radix(text.trim().trim_start_matches("0x"), 16).ok()
 }
 
 #[cfg(test)]
@@ -108,51 +108,48 @@ mod tests {
     use super::*;
 
     #[test]
-    fn la_base_incluida_tiene_los_fabricantes_principales() {
-        assert_eq!(fabricante(0x10de).as_deref(), Some("NVIDIA"));
-        assert_eq!(fabricante(0x1002).as_deref(), Some("AMD"));
-        assert_eq!(fabricante(0x8086).as_deref(), Some("Intel"));
+    fn bundled_database_has_the_main_vendors() {
+        assert_eq!(vendor_name(0x10de).as_deref(), Some("NVIDIA"));
+        assert_eq!(vendor_name(0x1002).as_deref(), Some("AMD"));
+        assert_eq!(vendor_name(0x8086).as_deref(), Some("Intel"));
     }
 
     #[test]
-    fn interpreta_fabricantes_y_dispositivos() {
-        let base = interpretar(
-            "# comentario\n10de  NVIDIA Corporation\n\t2504  GA106 [GeForce RTX 3060]\n\t\t1043 8851  subsistema\nabcd  Otro\n",
+    fn parses_vendors_and_devices() {
+        let db = parse(
+            "# comment\n10de  NVIDIA Corporation\n\t2504  GA106 [GeForce RTX 3060]\n\t\t1043 8851  subsystem\nabcd  Other\n",
         );
-        assert_eq!(
-            base[&0x10de].dispositivos[&0x2504],
-            "GA106 [GeForce RTX 3060]"
-        );
-        assert_eq!(base[&0xabcd].nombre, "Otro");
-        assert!(base[&0xabcd].dispositivos.is_empty());
+        assert_eq!(db[&0x10de].devices[&0x2504], "GA106 [GeForce RTX 3060]");
+        assert_eq!(db[&0xabcd].name, "Other");
+        assert!(db[&0xabcd].devices.is_empty());
     }
 
     #[test]
-    fn extrae_el_nombre_comercial() {
+    fn extracts_the_marketing_name() {
         assert_eq!(
-            nombre_comercial("GA106 [GeForce RTX 3060]"),
+            marketing_name("GA106 [GeForce RTX 3060]"),
             "GeForce RTX 3060"
         );
-        assert_eq!(nombre_comercial("Kaveri"), "Kaveri");
-        assert_eq!(nombre_comercial("Raro []"), "Raro []");
+        assert_eq!(marketing_name("Kaveri"), "Kaveri");
+        assert_eq!(marketing_name("Odd []"), "Odd []");
     }
 
     #[test]
-    fn acorta_fabricantes() {
+    fn shortens_vendors() {
         assert_eq!(
-            acortar_fabricante("Advanced Micro Devices, Inc. [AMD/ATI]"),
+            shorten_vendor("Advanced Micro Devices, Inc. [AMD/ATI]"),
             "AMD"
         );
-        assert_eq!(acortar_fabricante("Intel Corporation"), "Intel");
+        assert_eq!(shorten_vendor("Intel Corporation"), "Intel");
         assert_eq!(
-            acortar_fabricante("Matrox Electronics Systems Ltd."),
+            shorten_vendor("Matrox Electronics Systems Ltd."),
             "Matrox Electronics Systems"
         );
     }
 
     #[test]
-    fn lee_ids_de_sys() {
-        assert_eq!(leer_hex("0x10de\n"), Some(0x10de));
-        assert_eq!(leer_hex("zz"), None);
+    fn parses_ids_from_sys() {
+        assert_eq!(parse_hex("0x10de\n"), Some(0x10de));
+        assert_eq!(parse_hex("zz"), None);
     }
 }

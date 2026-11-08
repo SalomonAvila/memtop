@@ -1,88 +1,98 @@
 # memtop
 
-Información del sistema y monitor de recursos en una sola pantalla de terminal, para Linux.
+System information and resource monitor in a single terminal screen, for Linux.
 
-memtop combina dos cosas que normalmente se usan por separado: un resumen del equipo
-(modelo, sistema operativo, CPU, GPU, memoria…) y un monitor en vivo de CPU, memoria,
-discos, GPU, red y procesos. Está escrito en Rust con [ratatui](https://ratatui.rs) y se
-distribuye como un único binario estático, sin dependencias del sistema.
+memtop brings together two things that are usually separate tools: a summary of the machine
+(model, operating system, CPU, GPU, memory…) and a live monitor of CPU, memory, disks, GPU,
+network and processes. It is written in Rust with [ratatui](https://ratatui.rs) and ships as
+a single static binary with no system dependencies.
 
-## Contenido
+The interface and messages are available in English and Spanish (see [`--lang`](#usage)).
 
-- [Pantalla](#pantalla)
-- [Instalación](#instalación)
-- [Uso](#uso)
-- [Configuración](#configuración)
-- [Teclas](#teclas)
-- [Panel del Pokémon](#panel-del-pokémon)
-- [Datos y permisos](#datos-y-permisos)
-- [Desarrollo](#desarrollo)
-- [Licencia](#licencia)
+## Contents
 
-## Pantalla
+- [Screen](#screen)
+- [Installation](#installation)
+- [Usage](#usage)
+- [Configuration](#configuration)
+- [Keys](#keys)
+- [Data and permissions](#data-and-permissions)
+- [Development](#development)
+- [License](#license)
+
+## Screen
 
 ```
 ┌──────────────────────────────────────────────────────────────────────┐
-│ Pestañas: 1 Resumen · 2 CPU · 3 RAM · 4 Almacenamiento · 5 GPU · …   │
+│ Tabs: 1 Summary · 2 CPU · 3 RAM · 4 Storage · 5 GPU · 6 Network · …  │
 ├──────────────────────┬───────────────────────────────────────────────┤
+│   System             │                                               │
+│   user@host,         │   Content of the active tab                   │
+│   OS, kernel, CPU,   │   (bars, history charts, tables)              │
+│   GPU, memory…       │                                               │
 │                      │                                               │
-│   Pokémon            │                                               │
-│   (o el logo de      │   Contenido de la pestaña activa              │
-│    memtop)           │   (barras, gráficas de historial, tablas)     │
 │                      │                                               │
-├──────────────────────┤                                               │
-│   Sistema            │                                               │
-│   usuario@equipo,    │                                               │
-│   SO, kernel, CPU,   │                                               │
-│   GPU, memoria…      │                                               │
 ├──────────────────────┴───────────────────────────────────────────────┤
-│ Atajos de teclado de la pestaña actual                               │
+│ Keyboard shortcuts for the current tab                               │
 └──────────────────────────────────────────────────────────────────────┘
 ```
 
-| # | Pestaña | Contenido |
+With `logo = true` in the [configuration](#configuration), the memtop logo is shown above
+the System panel.
+
+| # | Tab | Content |
 |---|---|---|
-| 1 | Resumen | Uso de CPU con historial, RAM y swap, particiones, estado de las GPU, red, batería y procesos con más CPU |
-| 2 | CPU | Modelo, núcleos e hilos, frecuencias, carga media, uso por hilo, historial de 120 s y sensores de temperatura |
-| 3 | RAM | Usada, caché y swap; detalle de `/proc/meminfo`; historial y procesos con más memoria |
-| 4 | Almacenamiento | Discos físicos (modelo, tipo, tamaño, temperatura, velocidad de lectura y escritura) y particiones montadas |
-| 5 | GPU | Por cada GPU: fabricante, driver, dirección PCI, estado de energía, uso, VRAM, frecuencia, temperatura y consumo |
-| 6 | Red | Historial de descarga y subida, e interfaces con IP, MAC, velocidad actual y totales |
-| 7 | Procesos | Lista estilo htop con búsqueda, orden por columnas, filtro de procesos propios y envío de señales |
+| 1 | Summary | CPU usage with history, RAM and swap, partitions, GPU status, network, battery and top processes by CPU |
+| 2 | CPU | Model, cores and threads, frequencies, load average, per-thread usage, 120 s history and temperature sensors |
+| 3 | RAM | Used, cache and swap; `/proc/meminfo` details; history and top processes by memory |
+| 4 | Storage | Physical disks (model, type, size, temperature, read and write speed) and mounted partitions |
+| 5 | GPU | For each GPU: vendor, driver, PCI address, power state, usage, VRAM, clock, temperature and power draw |
+| 6 | Network | Download and upload history, and interfaces with IP, MAC, current speed and totals |
+| 7 | Processes | htop-style list with search, column sorting, an own-processes filter and signal sending |
 
-Los datos se actualizan cada segundo (configurable con `--intervalo` o en el
-[archivo de configuración](#configuración)).
+Data refreshes every second (configurable with `--interval` or in the
+[configuration file](#configuration)).
 
-## Instalación
+## Installation
 
-### Binario precompilado (recomendado)
+### Prebuilt binary (recommended)
 
-Cada [release](https://github.com/SalomonAvila/memtop/releases) incluye binarios **estáticos**
-para `x86_64` y `aarch64`. Funcionan en cualquier distribución Linux (Ubuntu, Debian,
-Fedora, Arch, Alpine…) y cualquier versión de `glibc`, porque no dependen de librerías del
-sistema.
+Every [release](https://github.com/SalomonAvila/memtop/releases) includes **static** binaries
+for `x86_64` and `aarch64`. They work on any Linux distribution (Ubuntu, Debian, Fedora,
+Arch, Alpine…) and any `glibc` version, because they do not depend on system libraries.
 
 ```sh
-arch="$(uname -m)"   # x86_64 o aarch64
+arch="$(uname -m)"   # x86_64 or aarch64
 curl -LO "https://github.com/SalomonAvila/memtop/releases/latest/download/memtop-${arch}-unknown-linux-musl.tar.gz"
 tar xzf "memtop-${arch}-unknown-linux-musl.tar.gz"
 install -Dm755 "memtop-${arch}-unknown-linux-musl/memtop" ~/.local/bin/memtop
 ```
 
-Asegúrate de que `~/.local/bin` está en tu `PATH`. Cada archivo publicado tiene al lado su
-suma `.sha256` para verificar la descarga:
+Make sure `~/.local/bin` is in your `PATH`. Each published archive comes with a `.sha256`
+file to verify the download:
 
 ```sh
 sha256sum -c "memtop-${arch}-unknown-linux-musl.tar.gz.sha256"
 ```
 
-### Desde el código fuente
+### Fedora (COPR)
 
-Requiere Rust **1.95 o superior**, instalado con [rustup](https://rustup.rs) (las versiones
-de Rust que traen los gestores de paquetes de muchas distribuciones son más antiguas), y un
-enlazador de C:
+memtop is packaged for Fedora 43, 44, 45 and Rawhide (`x86_64` and `aarch64`) in
+[COPR](https://copr.fedorainfracloud.org/coprs/mrmich/memtop/):
 
-| Distribución | Enlazador |
+```sh
+sudo dnf copr enable mrmich/memtop
+sudo dnf install memtop
+```
+
+Updates arrive with the rest of the system through `sudo dnf upgrade`.
+
+### From source
+
+Requires Rust **1.95 or newer**, installed with [rustup](https://rustup.rs) (the Rust
+packages shipped by many distributions are older), and a C linker:
+
+| Distribution | Linker |
 |---|---|
 | Ubuntu / Debian | `sudo apt install build-essential` |
 | Fedora | `sudo dnf install gcc` |
@@ -94,233 +104,220 @@ cd memtop
 cargo install --path . --locked
 ```
 
-El binario queda en `~/.cargo/bin/memtop`. Todas las dependencias son crates de Rust que
-Cargo descarga y compila; no hace falta ninguna librería de desarrollo del sistema.
+The binary is installed to `~/.cargo/bin/memtop`. Every dependency is a Rust crate that
+Cargo downloads and builds; no system development libraries are needed.
 
-Para generar el mismo binario estático que se publica:
+To build the same static binary that is published:
 
 ```sh
 rustup target add x86_64-unknown-linux-musl
 cargo build --release --locked --target x86_64-unknown-linux-musl
-# resultado: target/x86_64-unknown-linux-musl/release/memtop
+# output: target/x86_64-unknown-linux-musl/release/memtop
 ```
 
-### Programas opcionales
+### Optional program
 
-memtop funciona sin ninguno de ellos; solo amplían lo que muestra.
+memtop works without it; it only adds to what is shown.
 
-| Programa | Qué añade | De dónde sale |
+| Program | What it adds | Where it comes from |
 |---|---|---|
-| `nvidia-smi` | Uso, VRAM, temperatura, consumo y frecuencia de GPUs NVIDIA | Se instala junto con el driver propietario de NVIDIA |
-| `pokemon-colorscripts` | Un Pokémon al azar en el panel izquierdo (sin él se ve el logo de memtop) | [gitlab.com/phoneybadger/pokemon-colorscripts](https://gitlab.com/phoneybadger/pokemon-colorscripts) |
+| `nvidia-smi` | Usage, VRAM, temperature, power draw and clock of NVIDIA GPUs | Installed with the proprietary NVIDIA driver |
 
-## Uso
+## Usage
 
 ```sh
-memtop                                  # Pokémon al azar si está pokemon-colorscripts
-memtop --sin-pokemon --intervalo 2      # solo el logo, actualizando cada 2 s
+memtop                                  # opens on the Summary tab
+memtop --interval 2 --lang es           # refresh every 2 s, Spanish interface
 ```
 
-| Opción | Descripción |
+| Option | Description |
 |---|---|
-| `--sin-pokemon` | No mostrar Pokémon aunque `pokemon-colorscripts` esté instalado |
-| `-i`, `--intervalo SEG` | Segundos entre actualizaciones. Por defecto `1`, mínimo `0.2` |
-| `--idioma IDIOMA` | Idioma de la interfaz: `auto` (según `LANG`), `es` o `en` |
-| `-c`, `--config RUTA` | Usar este archivo de configuración en lugar del de por defecto |
-| `--config-ejemplo` | Imprimir una configuración de ejemplo comentada y salir |
-| `-V`, `--version` | Mostrar la versión |
-| `-h`, `--help` | Mostrar la ayuda |
+| `-i`, `--interval SECS` | Seconds between refreshes. Default `1`, minimum `0.2` |
+| `--lang LANG` | Interface language: `auto` (from `LANG`), `en` or `es` |
+| `-c`, `--config PATH` | Use this configuration file instead of the default one |
+| `--print-config` | Print a commented example configuration and exit |
+| `-V`, `--version` | Show the version |
+| `-h`, `--help` | Show the help |
 
-Códigos de salida: `0` correcto, `1` error en tiempo de ejecución, `2` opción inválida o
-error en el archivo de configuración.
+Exit codes: `0` success, `1` runtime error, `2` invalid option or configuration file error.
 
-## Configuración
+## Configuration
 
-memtop lee `$XDG_CONFIG_HOME/memtop/config.toml` (normalmente
-`~/.config/memtop/config.toml`) si existe. Si no existe, usa los valores por defecto. Para
-crearlo con todas las opciones comentadas:
+memtop reads `$XDG_CONFIG_HOME/memtop/config.toml` (usually `~/.config/memtop/config.toml`)
+if it exists; otherwise it uses the defaults. To create it with every option commented:
 
 ```sh
 mkdir -p ~/.config/memtop
-memtop --config-ejemplo > ~/.config/memtop/config.toml
+memtop --print-config > ~/.config/memtop/config.toml
 ```
 
-La plantilla completa está en [`config.ejemplo.toml`](config.ejemplo.toml). Todas las claves
-son opcionales:
+The full template is [`config.example.toml`](config.example.toml). Every key is optional:
 
-| Clave | Valores | Por defecto |
+| Key | Values | Default |
 |---|---|---|
-| `idioma` | `"auto"` (según `LANGUAGE`, `LC_ALL`, `LC_MESSAGES` o `LANG`), `"es"`, `"en"` | `"auto"` |
-| `intervalo` | Segundos entre actualizaciones, `0.2` o más | `1.0` |
-| `pestana_inicial` | `"resumen"`, `"cpu"`, `"ram"`, `"almacenamiento"`, `"gpu"`, `"red"`, `"procesos"` | `"resumen"` |
-| `pokemon` | `true` / `false` | `true` |
-| `[procesos] orden` | `"cpu"`, `"memoria"`, `"pid"`, `"nombre"`, `"usuario"` | `"cpu"` |
-| `[procesos] solo_mios` | `true` / `false` | `false` |
-| `[colores] acento` | Color de títulos, pestaña activa y teclas | `"cyan"` |
-| `[colores] tenue` | Color de bordes y textos secundarios | `"darkgray"` |
-| `[colores] etiqueta` | Color de los nombres de campo | `"lightblue"` |
-| `[colores] seleccion` | Fondo de la fila seleccionada en Procesos | `"#233755"` |
+| `language` | `"auto"` (from `LANGUAGE`, `LC_ALL`, `LC_MESSAGES` or `LANG`), `"en"`, `"es"` | `"auto"` |
+| `interval` | Seconds between refreshes, `0.2` or more | `1.0` |
+| `start_tab` | `"summary"`, `"cpu"`, `"ram"`, `"storage"`, `"gpu"`, `"network"`, `"processes"` | `"summary"` |
+| `logo` | `true` shows the memtop logo above the System panel; `false` lets the System panel take the whole column | `false` |
+| `[processes] sort` | `"cpu"`, `"memory"`, `"pid"`, `"name"`, `"user"` | `"cpu"` |
+| `[processes] mine_only` | `true` / `false` | `false` |
+| `[colors] accent` | Color of titles, the active tab and keys | `"cyan"` |
+| `[colors] muted` | Color of borders and secondary text | `"darkgray"` |
+| `[colors] label` | Color of field names | `"lightblue"` |
+| `[colors] selection` | Background of the selected row in Processes | `"#233755"` |
 
-Los colores aceptan nombres (`red`, `lightcyan`, `darkgray`…), hexadecimal (`"#rrggbb"`) o
-un índice de la paleta de 256 colores (`"0"` a `"255"`).
+Colors accept names (`red`, `lightcyan`, `darkgray`…), hexadecimal (`"#rrggbb"`) or an index
+into the 256-color palette (`"0"` to `"255"`).
 
-Por ejemplo, para abrir siempre en Procesos, ordenado por memoria y con acento verde:
+For example, to always open on Processes, sorted by memory, with a green accent:
 
 ```toml
-pestana_inicial = "procesos"
+start_tab = "processes"
 
-[procesos]
-orden = "memoria"
+[processes]
+sort = "memory"
 
-[colores]
-acento = "green"
+[colors]
+accent = "green"
 ```
 
-**Prioridad:** valores por defecto < archivo < opciones de la línea de comandos. Por ejemplo,
-`memtop -i 2` usa un intervalo de 2 s aunque el archivo diga otra cosa, pero respeta el resto
-del archivo.
+**Precedence:** defaults < file < command-line options. For example, `memtop -i 2` uses a
+2 s interval even if the file says otherwise, but keeps the rest of the file.
 
-**Errores:** si el archivo tiene un error de sintaxis, una clave desconocida (por ejemplo una
-errata como `pokemn`) o un valor no válido, memtop no arranca y muestra la línea exacta:
+**Errors:** if the file has a syntax error, an unknown key (for example a typo such as
+`intervals`) or an invalid value, memtop does not start and shows the exact line:
 
 ```
-memtop: error en ~/.config/memtop/config.toml: TOML parse error at line 3, column 1
+memtop: error in ~/.config/memtop/config.toml: TOML parse error at line 1, column 1
   |
-3 | pokemn = false
-  | ^^^^^^
-unknown field `pokemn`, expected one of `idioma`, `intervalo`, `pestana_inicial`, `pokemon`, `procesos`, `colores`
+1 | intervals = 2
+  | ^^^^^^^^^
+unknown field `intervals`, expected one of `language`, `interval`, `start_tab`, `logo`, `processes`, `colors`
 ```
 
-## Teclas
+Upgrading from 0.1.x? The flags and configuration keys were renamed; see the
+[changelog](CHANGELOG.md).
 
-Pulsa `?` dentro de memtop para ver esta lista.
+## Keys
 
-| Tecla | Acción |
+Press `?` inside memtop to see this list.
+
+| Key | Action |
 |---|---|
-| `←` `→`, `Tab`, `Shift+Tab`, `h` `l` | Pestaña anterior / siguiente |
-| `1` … `7` | Ir a una pestaña |
-| `f` | Otro Pokémon al azar |
-| `espacio` | Pausar o reanudar la actualización |
-| `?` | Ayuda |
-| `q`, `Esc`, `Ctrl+C` | Salir |
+| `←` `→`, `Tab`, `Shift+Tab`, `h` `l` | Previous / next tab |
+| `1` … `7` | Go to a tab |
+| `Space` | Pause or resume refreshing |
+| `?` | Help |
+| `q`, `Esc`, `Ctrl+C` | Quit |
 
-En la pestaña **Procesos**:
+In the **Processes** tab:
 
-| Tecla | Acción |
+| Key | Action |
 |---|---|
-| `↑` `↓`, `j` `k` | Mover la selección |
-| `PgUp` `PgDn` | Mover de 15 en 15 |
-| `g` / `G`, `Inicio` / `Fin` | Ir al primero / al último |
-| `/` | Buscar por nombre, línea de comandos, PID o usuario (`Enter` acepta, `Esc` borra) |
-| `c` `m` `p` `n` `u` | Ordenar por CPU, memoria, PID, nombre o usuario. Repetir la tecla invierte el orden |
-| `o` | Mostrar solo los procesos del usuario actual |
-| `x` | Quitar búsqueda y filtros |
-| `t`, `F9` | Enviar SIGTERM al proceso seleccionado (pide confirmación) |
-| `K` | Enviar SIGKILL al proceso seleccionado (pide confirmación) |
+| `↑` `↓`, `j` `k` | Move the selection |
+| `PgUp` `PgDn` | Move 15 rows at a time |
+| `g` / `G`, `Home` / `End` | Go to the first / last row |
+| `/` | Search by name, command line, PID or user (`Enter` accepts, `Esc` clears) |
+| `c` `m` `p` `n` `u` | Sort by CPU, memory, PID, name or user. Pressing the key again reverses the order |
+| `o` | Show only the current user's processes |
+| `x` | Clear search and filters |
+| `t`, `F9` | Send SIGTERM to the selected process (asks for confirmation) |
+| `K` | Send SIGKILL to the selected process (asks for confirmation) |
 
-Al buscar, filtrar u ordenar, la selección vuelve al primer proceso de la lista para que
-nunca quede seleccionado uno que no se ve.
+When searching, filtering or sorting, the selection goes back to the first process in the
+list so a hidden process is never left selected.
 
-## Panel del Pokémon
+## Data and permissions
 
-El panel izquierdo muestra un Pokémon al azar si `pokemon-colorscripts` está instalado y no
-se usó `--sin-pokemon` (o `pokemon = false`). Con `f` aparece otro. Si no, muestra el logo
-de memtop, incluido en el binario.
+memtop only **reads** local information: it needs no root, writes no files and does not use
+the network. The only action that changes the system is sending a signal to a process, and
+it always asks for confirmation; as a regular user it only affects your own processes.
 
-El pixel art se convierte en una cuadrícula de píxeles, se le recortan los bordes vacíos y
-se redibuja escalado al panel con caracteres de medio bloque `▀`, así que se ve igual en
-cualquier terminal con color. Si un factor entero (×2, ×3…) llena al menos el 85 % del
-espacio se usa ese, para que se vea nítido; si no, la escala exacta.
-
-## Datos y permisos
-
-memtop solo **lee** información local: no necesita root, no escribe archivos y no se conecta
-a la red. La única acción que modifica el sistema es enviar una señal a un proceso, y siempre
-pide confirmación; como usuario normal solo afecta a tus propios procesos.
-
-| Dato | Fuente |
+| Data | Source |
 |---|---|
-| CPU, procesos, red, particiones, temperaturas | crate [`sysinfo`](https://crates.io/crates/sysinfo) (`/proc`, `/sys`) |
-| Memoria | `/proc/meminfo` |
-| Discos físicos, velocidad y temperatura de NVMe | `/sys/block` |
-| Modelo del equipo | `/sys/class/dmi/id` |
-| Sistema operativo | `/etc/os-release` |
-| Batería | `/sys/class/power_supply` |
-| GPU (nombre, driver, estado de energía, datos AMD e Intel) | `/sys/bus/pci/devices` y la base PCI incluida en `data/pci-gpu.ids` |
-| GPU NVIDIA (uso, VRAM, temperatura, consumo) | `nvidia-smi`, si está instalado |
+| CPU, processes, network, partitions, temperatures | [`sysinfo`](https://crates.io/crates/sysinfo) crate (`/proc`, `/sys`) |
+| Memory | `/proc/meminfo` |
+| Physical disks, NVMe speed and temperature | `/sys/block` |
+| Machine model | `/sys/class/dmi/id` |
+| Operating system | `/etc/os-release` |
+| Battery | `/sys/class/power_supply` |
+| GPU (name, driver, power state, AMD and Intel data) | `/sys/bus/pci/devices` and the PCI database bundled in `data/pci-gpu.ids` |
+| NVIDIA GPU (usage, VRAM, temperature, power draw) | `nvidia-smi`, if installed |
 
-**Portátiles con gráfica híbrida.** Consultar `nvidia-smi` despierta la gráfica dedicada y
-aumenta el consumo. memtop solo la consulta mientras la pestaña GPU está visible y nunca
-cuando está suspendida; en el resto de pestañas solo lee su estado de energía desde `/sys`.
+**Laptops with hybrid graphics.** Querying `nvidia-smi` wakes up the discrete GPU and
+increases power usage. memtop only queries it while the GPU tab is visible and never while
+the GPU is suspended; on every other tab it only reads the power state from `/sys`.
 
-**Contenedores.** Dentro de un contenedor los datos de `/proc` y `/sys` pueden ser los del
-anfitrión (kernel, discos, sensores) o estar limitados (red, procesos).
+**Containers.** Inside a container, the data in `/proc` and `/sys` may belong to the host
+(kernel, disks, sensors) or be restricted (network, processes).
 
-## Desarrollo
+## Development
 
 ```sh
-cargo run --release          # ejecutar
-cargo test                   # pruebas
-cargo fmt                    # formato
+cargo run --release          # run
+cargo test                   # tests
+cargo fmt                    # format
 cargo clippy --all-targets -- -D warnings
 ```
 
-### Estructura
+### Layout
 
 ```
 memtop/
+├── .copr/Makefile              Builds the SRPM for COPR
 ├── .github/workflows/
-│   ├── ci.yml                  Formato, clippy, pruebas y binario estático en cada push
-│   └── release.yml             Publica binarios al subir una etiqueta vX.Y.Z
+│   ├── ci.yml                  Format, clippy, tests, static binaries and RPMs on every push
+│   └── release.yml             Publishes binaries when a vX.Y.Z tag is pushed
 ├── data/
-│   └── pci-gpu.ids             Extracto de pci.ids con los fabricantes de GPU
+│   └── pci-gpu.ids             Extract of pci.ids with the GPU vendors
+├── packaging/
+│   └── memtop.spec             RPM package for Fedora
 ├── scripts/
-│   └── actualizar-pci-ids.sh   Regenera data/pci-gpu.ids
+│   └── update-pci-ids.sh       Regenerates data/pci-gpu.ids
 ├── src/
-│   ├── main.rs                 Opciones de línea de comandos y bucle principal
-│   ├── config.rs               Archivo de configuración
-│   ├── app.rs                  Estado de la interfaz y teclas
-│   ├── ui.rs                   Dibujo de todas las pestañas
-│   ├── sistema.rs              Lectura de CPU, memoria, discos, red, procesos, sensores y batería
-│   ├── gpu.rs                  Detección de GPUs y consulta a nvidia-smi
-│   ├── pci.rs                  Nombres de GPU a partir de la base PCI incluida
-│   └── foto.rs                 Panel del Pokémon, sprites y logo
-├── config.ejemplo.toml         Plantilla de configuración (también en memtop --config-ejemplo)
+│   ├── main.rs                 Command-line options and main loop
+│   ├── config.rs               Configuration file
+│   ├── i18n.rs                 Interface language and translated text
+│   ├── app.rs                  Interface state and keys
+│   ├── ui.rs                   Drawing of every tab
+│   ├── system.rs               Reading CPU, memory, disks, network, processes, sensors and battery
+│   ├── gpu.rs                  GPU detection and nvidia-smi queries
+│   ├── pci.rs                  GPU names from the bundled PCI database
+│   └── logo.rs                 memtop logo in pixel art
+├── CHANGELOG.md                Changes in each version
+├── config.example.toml         Configuration template (also via memtop --print-config)
 ├── Cargo.toml
 ├── Cargo.lock
 ├── LICENSE
-└── THIRD_PARTY_NOTICES.md      Licencias de los datos y crates de terceros
+└── THIRD_PARTY_NOTICES.md      Licenses of third-party data and crates
 ```
 
-### Actualizar la base de GPUs
+### Updating the GPU database
 
-`data/pci-gpu.ids` se incluye en el binario al compilar. Para añadir modelos nuevos:
+`data/pci-gpu.ids` is embedded in the binary at build time. To pick up new models:
 
 ```sh
-scripts/actualizar-pci-ids.sh                 # descarga la última versión de pci-ids.ucw.cz
-scripts/actualizar-pci-ids.sh /usr/share/hwdata/pci.ids   # o usa una copia local
+scripts/update-pci-ids.sh                            # downloads the latest pci-ids.ucw.cz
+scripts/update-pci-ids.sh /usr/share/hwdata/pci.ids  # or uses a local copy
 ```
 
-### Publicar una versión
+### Releasing a version
 
-1. Actualiza `version` en `Cargo.toml`.
-2. Crea y sube la etiqueta:
+1. Update `version` in `Cargo.toml` and `packaging/memtop.spec`, and move the
+   `Unreleased` entries in `CHANGELOG.md` under the new version.
+2. Create and push the tag:
    ```sh
    git tag v0.2.0
    git push origin v0.2.0
    ```
-3. El flujo `release.yml` comprueba que la etiqueta coincide con `Cargo.toml`, crea la
-   release y adjunta los binarios estáticos con sus sumas SHA-256.
+3. The `release.yml` workflow checks that the tag matches `Cargo.toml`, creates the release
+   and attaches the static binaries with their SHA-256 sums.
 
-## Licencia
+## License
 
-Código bajo licencia [MIT](LICENSE).
+Code licensed under [MIT](LICENSE).
 
-`data/pci-gpu.ids` es un extracto de la base [pci.ids](https://pci-ids.ucw.cz), distribuida
-bajo GPL-2.0-or-later o BSD-3-Clause a elección; memtop la usa bajo BSD-3-Clause. El texto
-completo está en [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md), que se incluye en cada
-release.
-
-Pokémon es una marca de Nintendo, Game Freak y The Pokémon Company. memtop no incluye
-imágenes de Pokémon: solo muestra lo que genera `pokemon-colorscripts` si el usuario lo
-tiene instalado.
+`data/pci-gpu.ids` is an extract of the [pci.ids](https://pci-ids.ucw.cz) database,
+distributed under GPL-2.0-or-later or BSD-3-Clause at your choice; memtop uses it under
+BSD-3-Clause. The full text is in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md), which is
+included in every release.

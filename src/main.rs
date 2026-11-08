@@ -1,21 +1,21 @@
-//! memtop: información del sistema y monitor de recursos en una sola pantalla de terminal.
+//! memtop: system information and resource monitor in a single terminal screen.
 //!
-//! Estructura:
-//! - [`sistema`]: lectura de CPU, memoria, discos, red, procesos, sensores y batería.
-//! - [`gpu`] y [`pci`]: detección de GPUs y sus nombres comerciales.
-//! - [`foto`]: panel del Pokémon (o el logo) en pixel art.
-//! - [`config`]: archivo de configuración.
-//! - [`i18n`]: idioma de la interfaz y textos traducidos.
-//! - [`app`]: estado de la interfaz y manejo de teclas.
-//! - [`ui`]: dibujo de cada pestaña con ratatui.
+//! Layout:
+//! - [`system`]: reading CPU, memory, disks, network, processes, sensors and battery.
+//! - [`gpu`] and [`pci`]: GPU detection and their marketing names.
+//! - [`logo`]: memtop logo in pixel art for the left panel.
+//! - [`config`]: configuration file.
+//! - [`i18n`]: interface language and translated text.
+//! - [`app`]: interface state and key handling.
+//! - [`ui`]: drawing of every tab with ratatui.
 
 mod app;
 mod config;
-mod foto;
 mod gpu;
 mod i18n;
+mod logo;
 mod pci;
-mod sistema;
+mod system;
 mod ui;
 
 use std::{
@@ -35,135 +35,118 @@ use config::Config;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
-const AYUDA: &str = "\
-memtop — información del sistema y monitor de recursos en la terminal
-
-USO:
-    memtop [OPCIONES]
-
-OPCIONES:
-    --sin-pokemon           No mostrar Pokémon aunque pokemon-colorscripts esté instalado
-    -i, --intervalo SEG     Segundos entre actualizaciones (mínimo 0.2)
-    --idioma IDIOMA         Idioma de la interfaz: auto (según LANG), es o en
-    -c, --config RUTA       Usar este archivo de configuración
-    --config-ejemplo        Imprimir una configuración de ejemplo comentada
-    -V, --version           Mostrar la versión
-    -h, --help              Mostrar esta ayuda
-
-CONFIGURACIÓN:
-    Se lee $XDG_CONFIG_HOME/memtop/config.toml (normalmente ~/.config/memtop/config.toml)
-    si existe. Las opciones de arriba tienen prioridad sobre el archivo. Para crearlo:
-
-        mkdir -p ~/.config/memtop && memtop --config-ejemplo > ~/.config/memtop/config.toml
-
-Dentro de memtop pulsa ? para ver todas las teclas.
-";
-
-/// Opciones de la línea de comandos. `None` = no se indicó y manda la configuración.
+/// Command-line options. `None` = not given, so the configuration applies.
 #[derive(Debug, Default, PartialEq)]
-struct Opciones {
+struct Options {
     config: Option<PathBuf>,
-    pokemon: Option<bool>,
-    intervalo: Option<f64>,
-    idioma: Option<i18n::Preferencia>,
+    interval: Option<f64>,
+    language: Option<i18n::LanguageSetting>,
 }
 
-impl Opciones {
-    /// Aplica sobre la configuración las opciones indicadas en la línea de comandos.
-    fn aplicar(self, mut c: Config) -> Config {
-        if let Some(i) = self.intervalo {
-            c.intervalo = i;
+impl Options {
+    /// Applies the options given on the command line on top of the configuration.
+    fn apply(self, mut c: Config) -> Config {
+        if let Some(i) = self.interval {
+            c.interval = i;
         }
-        if let Some(p) = self.pokemon {
-            c.pokemon = p;
-        }
-        if let Some(i) = self.idioma {
-            c.idioma = i;
+        if let Some(i) = self.language {
+            c.language = i;
         }
         c
     }
 }
 
+/// What to do after parsing the options.
 #[derive(Debug, PartialEq)]
-enum Accion {
-    Ejecutar(Opciones),
-    Ayuda,
+enum Action {
+    Run,
+    Help,
     Version,
-    ConfigEjemplo,
+    PrintConfig,
 }
 
-fn leer_opciones(args: impl IntoIterator<Item = String>) -> Result<Accion, String> {
-    let mut o = Opciones::default();
+/// Parses the options. `--help`, `--version` and `--print-config` are resolved at the end
+/// so a `--lang` in any position changes the language of the help.
+fn parse_args(args: impl IntoIterator<Item = String>) -> Result<(Action, Options), String> {
+    let t = i18n::t();
+    let mut o = Options::default();
+    let mut action = None;
     let mut args = args.into_iter();
     while let Some(a) = args.next() {
         match a.as_str() {
-            "-h" | "--help" => return Ok(Accion::Ayuda),
-            "-V" | "--version" => return Ok(Accion::Version),
-            "--config-ejemplo" => return Ok(Accion::ConfigEjemplo),
+            "-h" | "--help" => action = action.or(Some(Action::Help)),
+            "-V" | "--version" => action = action.or(Some(Action::Version)),
+            "--print-config" => action = action.or(Some(Action::PrintConfig)),
             "-c" | "--config" => {
-                o.config = Some(PathBuf::from(
-                    args.next().ok_or("--config necesita una ruta")?,
-                ))
+                o.config = Some(PathBuf::from(args.next().ok_or(t.cli_missing_path)?))
             }
-            "--idioma" => {
-                let v = args
-                    .next()
-                    .ok_or("--idioma necesita un valor: auto, es o en")?;
+            "--lang" => {
+                let v = args.next().ok_or(t.cli_missing_lang)?;
                 let i = v
                     .parse()
-                    .map_err(|_| format!("--idioma no admite {v:?}: usa auto, es o en"))?;
-                o.idioma = Some(i);
+                    .map_err(|_| format!("{}: {v:?}", t.cli_invalid_lang))?;
+                o.language = Some(i);
             }
-            "--sin-pokemon" => o.pokemon = Some(false),
-            "-i" | "--intervalo" => {
+            "-i" | "--interval" => {
                 let s: f64 = args
                     .next()
                     .and_then(|v| v.replace(',', ".").parse().ok())
-                    .filter(|v: &f64| v.is_finite() && *v >= config::INTERVALO_MINIMO)
-                    .ok_or("--intervalo necesita un número de segundos (mínimo 0.2)")?;
-                o.intervalo = Some(s);
+                    .filter(|v: &f64| v.is_finite() && *v >= config::MIN_INTERVAL)
+                    .ok_or(t.cli_invalid_interval)?;
+                o.interval = Some(s);
             }
-            otro => return Err(format!("opción desconocida: {otro}")),
+            other => return Err(format!("{}: {other}", t.cli_unknown_option)),
         }
     }
-    Ok(Accion::Ejecutar(o))
+    Ok((action.unwrap_or(Action::Run), o))
 }
 
 fn main() -> ExitCode {
-    let opciones = match leer_opciones(env::args().skip(1)) {
-        Ok(Accion::Ejecutar(o)) => o,
-        Ok(Accion::Ayuda) => {
-            print!("{AYUDA}");
-            return ExitCode::SUCCESS;
-        }
-        Ok(Accion::Version) => {
-            println!("memtop {VERSION}");
-            return ExitCode::SUCCESS;
-        }
-        Ok(Accion::ConfigEjemplo) => {
-            print!("{}", config::EJEMPLO);
-            return ExitCode::SUCCESS;
-        }
+    // Until the options are parsed, messages use the environment's language.
+    let (action, options) = match parse_args(env::args().skip(1)) {
+        Ok(r) => r,
         Err(e) => {
-            eprintln!("memtop: {e}\nPrueba `memtop --help`.");
+            eprintln!("memtop: {e}\n{}", i18n::t().cli_try_help);
             return ExitCode::from(2);
         }
     };
+    // From here on, the help and the configuration file errors honor `--lang`.
+    if let Some(i) = options.language {
+        i18n::set(i.resolve());
+    }
+    match action {
+        Action::Run => {}
+        Action::Help => {
+            print!("{}", i18n::t().cli_help);
+            return ExitCode::SUCCESS;
+        }
+        Action::Version => {
+            println!("memtop {VERSION}");
+            return ExitCode::SUCCESS;
+        }
+        Action::PrintConfig => {
+            print!("{}", config::EXAMPLE);
+            return ExitCode::SUCCESS;
+        }
+    }
 
-    let config = match config::cargar(opciones.config.as_deref()) {
-        Ok(c) => opciones.aplicar(c),
+    let config = match config::load(options.config.as_deref()) {
+        Ok(c) => options.apply(c),
         Err(e) => {
             eprintln!("memtop: {e:#}");
             return ExitCode::from(2);
         }
     };
 
+    // Final language: configuration file and, on top of it, `--lang`.
+    i18n::set(config.language.resolve());
+
     if !stdout().is_terminal() {
-        eprintln!("memtop: necesita ejecutarse en una terminal interactiva.");
+        eprintln!("memtop: {}", i18n::t().cli_no_terminal);
         return ExitCode::FAILURE;
     }
 
-    match iniciar(config) {
+    match start(config) {
         Ok(()) => ExitCode::SUCCESS,
         Err(e) => {
             eprintln!("memtop: {e:#}");
@@ -172,39 +155,37 @@ fn main() -> ExitCode {
     }
 }
 
-fn iniciar(config: Config) -> Result<()> {
-    i18n::fijar(config.idioma.resolver());
-    ui::fijar_tema(config.colores.clone());
-    // Primera lectura antes de entrar a la interfaz: el uso de CPU necesita dos muestras.
-    let monitor = sistema::Monitor::new()?;
+fn start(config: Config) -> Result<()> {
+    ui::set_theme(config.colors.clone());
+    // First reading before entering the interface: CPU usage needs two samples.
+    let monitor = system::Monitor::new()?;
 
-    // `ratatui::init` activa el modo raw y la pantalla alternativa, e instala un hook
-    // que restaura la terminal si el programa entra en pánico.
+    // `ratatui::init` enables raw mode and the alternate screen, and installs a hook that
+    // restores the terminal if the program panics.
     let mut terminal = ratatui::init();
-    let fotos = foto::Fotos::new(config.pokemon);
-    let app = App::new(monitor, fotos, &config);
-    let resultado = ejecutar(&mut terminal, app, config.intervalo());
+    let app = App::new(monitor, &config);
+    let result = run(&mut terminal, app, config.refresh_interval());
     ratatui::restore();
-    resultado
+    result
 }
 
-/// Bucle principal: dibuja, espera teclas hasta el siguiente tick y actualiza los datos.
-fn ejecutar(terminal: &mut DefaultTerminal, mut app: App, intervalo: Duration) -> Result<()> {
-    let mut siguiente_tick = Instant::now() + intervalo;
+/// Main loop: draws, waits for keys until the next tick and refreshes the data.
+fn run(terminal: &mut DefaultTerminal, mut app: App, interval: Duration) -> Result<()> {
+    let mut next_tick = Instant::now() + interval;
 
-    while !app.salir {
-        terminal.draw(|f| ui::dibujar(f, &mut app))?;
+    while !app.quit {
+        terminal.draw(|f| ui::draw(f, &mut app))?;
 
-        let espera = siguiente_tick.saturating_duration_since(Instant::now());
-        if event::poll(espera)? {
+        let wait = next_tick.saturating_duration_since(Instant::now());
+        if event::poll(wait)? {
             match event::read()? {
-                Event::Key(k) if k.kind == KeyEventKind::Press => app.tecla(k),
+                Event::Key(k) if k.kind == KeyEventKind::Press => app.key(k),
                 _ => {}
             }
         }
-        if Instant::now() >= siguiente_tick {
+        if Instant::now() >= next_tick {
             app.tick();
-            siguiente_tick = Instant::now() + intervalo;
+            next_tick = Instant::now() + interval;
         }
     }
     Ok(())
@@ -214,69 +195,76 @@ fn ejecutar(terminal: &mut DefaultTerminal, mut app: App, intervalo: Duration) -
 mod tests {
     use super::*;
 
-    fn leer(args: &[&str]) -> Result<Accion, String> {
-        leer_opciones(args.iter().map(|s| s.to_string()))
+    fn parse(args: &[&str]) -> Result<Action, String> {
+        parse_args(args.iter().map(|s| s.to_string())).map(|(a, _)| a)
     }
 
-    fn opciones(args: &[&str]) -> Opciones {
-        match leer(args) {
-            Ok(Accion::Ejecutar(o)) => o,
-            otro => panic!("debería ejecutar: {otro:?}"),
+    fn options(args: &[&str]) -> Options {
+        match parse_args(args.iter().map(|s| s.to_string())) {
+            Ok((Action::Run, o)) => o,
+            other => panic!("should run: {other:?}"),
         }
     }
 
     #[test]
-    fn sin_argumentos_no_cambia_la_configuracion() {
-        assert_eq!(opciones(&[]), Opciones::default());
-        assert_eq!(opciones(&[]).aplicar(Config::default()), Config::default());
+    fn no_arguments_keep_the_configuration() {
+        assert_eq!(options(&[]), Options::default());
+        assert_eq!(options(&[]).apply(Config::default()), Config::default());
     }
 
     #[test]
-    fn interpreta_todas_las_opciones() {
-        let o = opciones(&[
-            "--idioma",
-            "en",
-            "--sin-pokemon",
-            "-i",
-            "2,5",
-            "-c",
-            "/tmp/c.toml",
-        ]);
+    fn parses_every_option() {
+        let o = options(&["--lang", "en", "-i", "2,5", "-c", "/tmp/c.toml"]);
         assert_eq!(o.config, Some(PathBuf::from("/tmp/c.toml")));
-        let c = o.aplicar(Config::default());
-        assert!(!c.pokemon);
-        assert_eq!(c.idioma, i18n::Preferencia::En);
-        assert_eq!(c.intervalo(), Duration::from_millis(2500));
+        let c = o.apply(Config::default());
+        assert_eq!(c.language, i18n::LanguageSetting::En);
+        assert_eq!(c.refresh_interval(), Duration::from_millis(2500));
     }
 
     #[test]
-    fn las_opciones_tienen_prioridad_sobre_el_archivo() {
-        let archivo = config::interpretar(
-            "idioma = \"es\"\nintervalo = 5.0\npokemon = true\npestana_inicial = \"red\"",
-        )
-        .unwrap();
-        let c = opciones(&["-i", "2", "--sin-pokemon", "--idioma", "en"]).aplicar(archivo);
-        assert_eq!(c.intervalo, 2.0);
-        assert!(!c.pokemon);
-        assert_eq!(c.idioma, i18n::Preferencia::En);
-        // Lo que no se indicó en la línea de comandos sale del archivo.
-        assert_eq!(c.pestana_inicial, app::Pestana::Red);
+    fn options_take_precedence_over_the_file() {
+        let file =
+            config::parse("language = \"es\"\ninterval = 5.0\nstart_tab = \"network\"").unwrap();
+        let c = options(&["-i", "2", "--lang", "en"]).apply(file);
+        assert_eq!(c.interval, 2.0);
+        assert_eq!(c.language, i18n::LanguageSetting::En);
+        // Whatever was not given on the command line comes from the file.
+        assert_eq!(c.start_tab, app::Tab::Network);
     }
 
     #[test]
-    fn acciones_que_no_abren_la_interfaz() {
-        assert_eq!(leer(&["--help"]), Ok(Accion::Ayuda));
-        assert_eq!(leer(&["-V"]), Ok(Accion::Version));
-        assert_eq!(leer(&["--config-ejemplo"]), Ok(Accion::ConfigEjemplo));
+    fn rejects_the_old_spanish_options() {
+        for old in [
+            "--intervalo",
+            "--idioma",
+            "--config-ejemplo",
+            "--sin-pokemon",
+        ] {
+            assert!(parse(&[old, "1"]).is_err(), "{old}");
+        }
     }
 
     #[test]
-    fn rechaza_valores_invalidos() {
-        assert!(leer(&["--config"]).is_err());
-        assert!(leer(&["--idioma"]).is_err());
-        assert!(leer(&["--idioma", "fr"]).is_err());
-        assert!(leer(&["-i", "0.1"]).is_err());
-        assert!(leer(&["-i", "nan"]).is_err());
-        assert!(leer(&["--desconocida"]).is_err());
+    fn actions_that_do_not_open_the_interface() {
+        assert_eq!(parse(&["--help"]), Ok(Action::Help));
+        assert_eq!(parse(&["-V"]), Ok(Action::Version));
+        assert_eq!(parse(&["--print-config"]), Ok(Action::PrintConfig));
+        // --lang is kept even after --help; the first action wins.
+        let (action, o) = parse_args(["--help", "--lang", "es"].map(String::from)).unwrap();
+        assert_eq!(action, Action::Help);
+        assert_eq!(o.language, Some(i18n::LanguageSetting::Es));
+        assert_eq!(parse(&["-V", "--help"]), Ok(Action::Version));
+        // An error in another option is reported even with --help.
+        assert!(parse(&["--help", "--lang", "fr"]).is_err());
+    }
+
+    #[test]
+    fn rejects_invalid_values() {
+        assert!(parse(&["--config"]).is_err());
+        assert!(parse(&["--lang"]).is_err());
+        assert!(parse(&["--lang", "fr"]).is_err());
+        assert!(parse(&["-i", "0.1"]).is_err());
+        assert!(parse(&["-i", "nan"]).is_err());
+        assert!(parse(&["--unknown"]).is_err());
     }
 }

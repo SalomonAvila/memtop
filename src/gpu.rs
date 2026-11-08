@@ -82,17 +82,17 @@ pub fn detectar() -> Vec<Gpu> {
                 return None;
             }
             let direccion = e.file_name().to_string_lossy().into_owned();
-            let vendor = leer(ruta.join("vendor")).and_then(|v| pci::leer_hex(&v));
-            let device = leer(ruta.join("device")).and_then(|v| pci::leer_hex(&v));
+            let vendor = leer(ruta.join("vendor")).and_then(|v| pci::parse_hex(&v));
+            let device = leer(ruta.join("device")).and_then(|v| pci::parse_hex(&v));
             let driver = fs::read_link(ruta.join("driver"))
                 .ok()
                 .and_then(|p| p.file_name().map(|n| n.to_string_lossy().into_owned()));
             let fabricante = vendor
-                .and_then(pci::fabricante)
+                .and_then(pci::vendor_name)
                 .unwrap_or_else(|| "Desconocido".into());
             let nombre = vendor
                 .zip(device)
-                .and_then(|(v, d)| pci::dispositivo(v, d))
+                .and_then(|(v, d)| pci::device_name(v, d))
                 .unwrap_or_else(|| {
                     format!(
                         "GPU {:04x}:{:04x}",

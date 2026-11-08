@@ -1,5 +1,5 @@
-//! Estado de la interfaz: pestaña activa, lista de procesos (búsqueda, orden y
-//! selección), ventanas modales y traducción de teclas a acciones.
+//! Interface state: active tab, process list (search, sort and selection), modal dialogs
+//! and mapping of keys to actions.
 
 use std::time::Instant;
 
@@ -10,184 +10,174 @@ use serde::Deserialize;
 use crate::{
     config::Config,
     gpu, i18n,
-    sistema::{ErrorSenal, Monitor, Proceso},
+    system::{Monitor, Process, SignalError},
 };
 
-/// Pestañas del panel derecho, en el orden en que se muestran (teclas `1`–`7`).
-/// En la configuración se escriben en inglés y minúsculas (`"summary"`, `"processes"`…).
+/// Tabs of the right panel, in the order they are shown (keys `1`–`7`).
+/// In the configuration they are written in lowercase (`"summary"`, `"processes"`…).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "lowercase")]
-pub enum Pestana {
-    #[serde(rename = "summary")]
-    Resumen,
+pub enum Tab {
+    Summary,
     Cpu,
     Ram,
-    #[serde(rename = "storage")]
-    Almacenamiento,
+    Storage,
     Gpu,
-    #[serde(rename = "network")]
-    Red,
-    #[serde(rename = "processes")]
-    Procesos,
+    Network,
+    Processes,
 }
 
-impl Pestana {
-    pub const TODAS: [Pestana; 7] = [
-        Pestana::Resumen,
-        Pestana::Cpu,
-        Pestana::Ram,
-        Pestana::Almacenamiento,
-        Pestana::Gpu,
-        Pestana::Red,
-        Pestana::Procesos,
+impl Tab {
+    pub const ALL: [Tab; 7] = [
+        Tab::Summary,
+        Tab::Cpu,
+        Tab::Ram,
+        Tab::Storage,
+        Tab::Gpu,
+        Tab::Network,
+        Tab::Processes,
     ];
-    /// Nombre de la pestaña en el idioma de la interfaz.
-    pub fn titulo(self) -> &'static str {
+    /// Tab name in the interface language.
+    pub fn title(self) -> &'static str {
         let t = i18n::t();
         match self {
-            Pestana::Resumen => t.pestana_resumen,
-            Pestana::Cpu => t.pestana_cpu,
-            Pestana::Ram => t.pestana_ram,
-            Pestana::Almacenamiento => t.pestana_almacenamiento,
-            Pestana::Gpu => t.pestana_gpu,
-            Pestana::Red => t.pestana_red,
-            Pestana::Procesos => t.pestana_procesos,
+            Tab::Summary => t.tab_summary,
+            Tab::Cpu => t.tab_cpu,
+            Tab::Ram => t.tab_ram,
+            Tab::Storage => t.tab_storage,
+            Tab::Gpu => t.tab_gpu,
+            Tab::Network => t.tab_network,
+            Tab::Processes => t.tab_processes,
         }
     }
-    fn indice(self) -> usize {
-        Self::TODAS.iter().position(|p| *p == self).unwrap_or(0)
+    fn index(self) -> usize {
+        Self::ALL.iter().position(|p| *p == self).unwrap_or(0)
     }
 }
 
-/// Columna por la que se ordena la pestaña Procesos.
-/// En la configuración se escriben en inglés y minúsculas (`"cpu"`, `"memory"`…).
+/// Column the Processes tab is sorted by.
+/// In the configuration they are written in lowercase (`"cpu"`, `"memory"`…).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "lowercase")]
-pub enum OrdenProc {
+pub enum ProcessSort {
     Cpu,
-    #[serde(rename = "memory")]
-    Memoria,
+    Memory,
     Pid,
-    #[serde(rename = "name")]
-    Nombre,
-    #[serde(rename = "user")]
-    Usuario,
+    Name,
+    User,
 }
 
-impl OrdenProc {
-    /// Números de mayor a menor (lo que más consume, arriba); texto de la A a la Z.
-    fn descendente_por_defecto(self) -> bool {
-        matches!(self, OrdenProc::Cpu | OrdenProc::Memoria)
+impl ProcessSort {
+    /// Numbers from highest to lowest (the heaviest on top); text from A to Z.
+    fn descending_by_default(self) -> bool {
+        matches!(self, ProcessSort::Cpu | ProcessSort::Memory)
     }
 }
 
-/// Qué recibe las teclas: la vista normal, la búsqueda o una ventana modal.
+/// What receives the keys: the normal view, the search box or a modal dialog.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Modo {
+pub enum Mode {
     Normal,
-    Buscando,
-    Ayuda,
-    Confirmar {
-        pid: u32,
-        nombre: String,
-        forzar: bool,
-    },
+    Searching,
+    Help,
+    Confirm { pid: u32, name: String, force: bool },
 }
 
 pub struct App {
-    /// Datos del sistema; se refrescan en cada [`App::tick`].
+    /// System data; refreshed on every [`App::tick`].
     pub monitor: Monitor,
-    pub pestana: Pestana,
-    pub modo: Modo,
-    pub pausado: bool,
-    pub salir: bool,
+    pub tab: Tab,
+    pub mode: Mode,
+    pub paused: bool,
+    pub quit: bool,
 
-    pub tabla_proc: TableState,
-    pub orden_proc: OrdenProc,
-    pub desc: bool,
-    pub busqueda: String,
-    pub solo_mios: bool,
-    /// Mostrar el logo encima del panel Sistema (`logo` en la configuración).
+    pub process_table: TableState,
+    pub process_sort: ProcessSort,
+    pub descending: bool,
+    pub search: String,
+    pub mine_only: bool,
+    /// Show the logo above the System panel (`logo` in the configuration).
     pub logo: bool,
-    sel_pid: Option<u32>,
+    selected_pid: Option<u32>,
 
-    pub mensaje: Option<(String, bool, Instant)>,
+    /// Message shown in the footer: text, whether it is an error, and when it appeared.
+    pub notice: Option<(String, bool, Instant)>,
 }
 
 impl App {
-    /// Crea el estado inicial con la pestaña, el orden y el filtro de la configuración.
+    /// Creates the initial state with the tab, sort and filter from the configuration.
     pub fn new(monitor: Monitor, config: &Config) -> Self {
-        let orden = config.procesos.orden;
+        let sort = config.processes.sort;
         let mut app = Self {
             monitor,
-            pestana: Pestana::Resumen,
-            modo: Modo::Normal,
-            pausado: false,
-            salir: false,
-            tabla_proc: TableState::default().with_selected(0),
-            orden_proc: orden,
-            desc: orden.descendente_por_defecto(),
-            busqueda: String::new(),
-            solo_mios: config.procesos.solo_mios,
+            tab: Tab::Summary,
+            mode: Mode::Normal,
+            paused: false,
+            quit: false,
+            process_table: TableState::default().with_selected(0),
+            process_sort: sort,
+            descending: sort.descending_by_default(),
+            search: String::new(),
+            mine_only: config.processes.mine_only,
             logo: config.logo,
-            sel_pid: None,
-            mensaje: None,
+            selected_pid: None,
+            notice: None,
         };
-        // `ir_a` también activa la consulta de la GPU NVIDIA si se empieza en esa pestaña.
-        app.ir_a(config.pestana_inicial);
-        app.sincronizar_seleccion();
+        // `go_to` also enables the NVIDIA GPU queries if the app starts on that tab.
+        app.go_to(config.start_tab);
+        app.sync_selection();
         app
     }
 
     pub fn tick(&mut self) {
-        if !self.pausado {
-            self.monitor.actualizar();
-            self.sincronizar_seleccion();
+        if !self.paused {
+            self.monitor.refresh();
+            self.sync_selection();
         }
         if self
-            .mensaje
+            .notice
             .as_ref()
             .is_some_and(|(_, _, t)| t.elapsed().as_secs() >= 4)
         {
-            self.mensaje = None;
+            self.notice = None;
         }
     }
 
-    /// Procesos filtrados y ordenados como en la pestaña Procesos.
-    pub fn procesos(&self) -> Vec<&Proceso> {
-        let q = self.busqueda.to_lowercase();
-        let yo = &self.monitor.info.usuario;
-        let mut v: Vec<&Proceso> = self
+    /// Processes filtered and sorted as in the Processes tab.
+    pub fn processes(&self) -> Vec<&Process> {
+        let q = self.search.to_lowercase();
+        let me = &self.monitor.info.user;
+        let mut v: Vec<&Process> = self
             .monitor
-            .procesos
+            .processes
             .iter()
-            .filter(|p| !self.solo_mios || &p.usuario == yo)
+            .filter(|p| !self.mine_only || &p.user == me)
             .filter(|p| {
                 q.is_empty()
-                    || p.nombre.to_lowercase().contains(&q)
-                    || p.comando.to_lowercase().contains(&q)
+                    || p.name.to_lowercase().contains(&q)
+                    || p.command.to_lowercase().contains(&q)
                     || p.pid.to_string() == q
-                    || p.usuario.to_lowercase() == q
+                    || p.user.to_lowercase() == q
             })
             .collect();
         v.sort_by(|a, b| {
-            let o = match self.orden_proc {
-                OrdenProc::Cpu => a.cpu.total_cmp(&b.cpu),
-                OrdenProc::Memoria => a.memoria.cmp(&b.memoria),
-                OrdenProc::Pid => a.pid.cmp(&b.pid),
-                OrdenProc::Nombre => a.nombre.to_lowercase().cmp(&b.nombre.to_lowercase()),
-                OrdenProc::Usuario => a.usuario.cmp(&b.usuario),
+            let o = match self.process_sort {
+                ProcessSort::Cpu => a.cpu.total_cmp(&b.cpu),
+                ProcessSort::Memory => a.memory.cmp(&b.memory),
+                ProcessSort::Pid => a.pid.cmp(&b.pid),
+                ProcessSort::Name => a.name.to_lowercase().cmp(&b.name.to_lowercase()),
+                ProcessSort::User => a.user.cmp(&b.user),
             };
-            if self.desc { o.reverse() } else { o }.then(a.pid.cmp(&b.pid))
+            if self.descending { o.reverse() } else { o }.then(a.pid.cmp(&b.pid))
         });
         v
     }
 
-    /// Top N procesos por CPU o memoria (para Resumen/CPU/RAM).
-    pub fn top(&self, por_memoria: bool, n: usize) -> Vec<&Proceso> {
-        let mut v: Vec<&Proceso> = self.monitor.procesos.iter().collect();
-        if por_memoria {
-            v.sort_by_key(|p| std::cmp::Reverse(p.memoria));
+    /// Top N processes by CPU or memory (for Summary/CPU/RAM).
+    pub fn top(&self, by_memory: bool, n: usize) -> Vec<&Process> {
+        let mut v: Vec<&Process> = self.monitor.processes.iter().collect();
+        if by_memory {
+            v.sort_by_key(|p| std::cmp::Reverse(p.memory));
         } else {
             v.sort_by(|a, b| b.cpu.total_cmp(&a.cpu));
         }
@@ -195,174 +185,172 @@ impl App {
         v
     }
 
-    /// Mantiene seleccionado el mismo PID aunque la lista se reordene.
-    fn sincronizar_seleccion(&mut self) {
-        let lista = self.procesos();
+    /// Keeps the same PID selected even if the list is reordered.
+    fn sync_selection(&mut self) {
+        let list = self.processes();
         let pos = self
-            .sel_pid
-            .and_then(|pid| lista.iter().position(|p| p.pid == pid))
+            .selected_pid
+            .and_then(|pid| list.iter().position(|p| p.pid == pid))
             .or_else(|| {
-                (!lista.is_empty())
-                    .then(|| self.tabla_proc.selected().unwrap_or(0).min(lista.len() - 1))
+                (!list.is_empty()).then(|| {
+                    self.process_table
+                        .selected()
+                        .unwrap_or(0)
+                        .min(list.len() - 1)
+                })
             });
-        self.sel_pid = pos.map(|i| lista[i].pid);
-        self.tabla_proc.select(pos);
+        self.selected_pid = pos.map(|i| list[i].pid);
+        self.process_table.select(pos);
     }
 
-    /// Tras buscar, filtrar u ordenar: volver al primer proceso de la lista.
-    fn al_inicio(&mut self) {
-        self.sel_pid = None;
-        self.tabla_proc = TableState::default().with_selected(0);
-        self.sincronizar_seleccion();
+    /// After searching, filtering or sorting: go back to the first process in the list.
+    fn reset_selection(&mut self) {
+        self.selected_pid = None;
+        self.process_table = TableState::default().with_selected(0);
+        self.sync_selection();
     }
 
-    fn mover(&mut self, delta: isize) {
-        let lista = self.procesos();
-        if lista.is_empty() {
+    fn move_selection(&mut self, delta: isize) {
+        let list = self.processes();
+        if list.is_empty() {
             return;
         }
-        let i = self.tabla_proc.selected().unwrap_or(0) as isize;
-        let n = (i.saturating_add(delta)).clamp(0, lista.len() as isize - 1) as usize;
-        self.sel_pid = Some(lista[n].pid);
-        self.tabla_proc.select(Some(n));
+        let i = self.process_table.selected().unwrap_or(0) as isize;
+        let n = (i.saturating_add(delta)).clamp(0, list.len() as isize - 1) as usize;
+        self.selected_pid = Some(list[n].pid);
+        self.process_table.select(Some(n));
     }
 
-    fn seleccionado(&self) -> Option<&Proceso> {
-        let pid = self.sel_pid?;
-        self.monitor.procesos.iter().find(|p| p.pid == pid)
+    fn selected(&self) -> Option<&Process> {
+        let pid = self.selected_pid?;
+        self.monitor.processes.iter().find(|p| p.pid == pid)
     }
 
-    fn ir_a(&mut self, p: Pestana) {
-        self.pestana = p;
-        gpu::CONSULTAR_NVIDIA.store(p == Pestana::Gpu, std::sync::atomic::Ordering::Relaxed);
+    fn go_to(&mut self, tab: Tab) {
+        self.tab = tab;
+        gpu::QUERY_NVIDIA.store(tab == Tab::Gpu, std::sync::atomic::Ordering::Relaxed);
     }
 
-    fn ordenar(&mut self, o: OrdenProc) {
-        if self.orden_proc == o {
-            self.desc = !self.desc;
+    fn sort_by(&mut self, sort: ProcessSort) {
+        if self.process_sort == sort {
+            self.descending = !self.descending;
         } else {
-            self.orden_proc = o;
-            self.desc = o.descendente_por_defecto();
+            self.process_sort = sort;
+            self.descending = sort.descending_by_default();
         }
-        self.al_inicio();
+        self.reset_selection();
     }
 
-    fn avisar(&mut self, texto: impl Into<String>, error: bool) {
-        self.mensaje = Some((texto.into(), error, Instant::now()));
+    fn notify(&mut self, text: impl Into<String>, error: bool) {
+        self.notice = Some((text.into(), error, Instant::now()));
     }
 
-    pub fn tecla(&mut self, k: KeyEvent) {
+    pub fn key(&mut self, k: KeyEvent) {
         if k.modifiers.contains(KeyModifiers::CONTROL) && k.code == KeyCode::Char('c') {
-            self.salir = true;
+            self.quit = true;
             return;
         }
-        match self.modo.clone() {
-            Modo::Ayuda => self.modo = Modo::Normal,
-            Modo::Confirmar {
-                pid,
-                nombre,
-                forzar,
-            } => {
+        match self.mode.clone() {
+            Mode::Help => self.mode = Mode::Normal,
+            Mode::Confirm { pid, name, force } => {
                 if matches!(
                     k.code,
                     KeyCode::Char('s' | 'S' | 'y' | 'Y') | KeyCode::Enter
                 ) {
                     let t = i18n::t();
-                    match self.monitor.senal(pid, forzar) {
-                        Ok(()) => self.avisar(
+                    match self.monitor.signal(pid, force) {
+                        Ok(()) => self.notify(
                             format!(
-                                "{} {} {nombre} ({pid})",
-                                if forzar { "SIGKILL" } else { "SIGTERM" },
-                                t.aviso_enviado_a
+                                "{} {} {name} ({pid})",
+                                if force { "SIGKILL" } else { "SIGTERM" },
+                                t.notice_sent_to
                             ),
                             false,
                         ),
                         Err(e) => {
-                            let motivo = match e {
-                                ErrorSenal::NoExiste => t.senal_no_existe,
-                                ErrorSenal::SinPermiso => t.senal_sin_permiso,
-                                ErrorSenal::NoSoportada => t.senal_no_soportada,
+                            let reason = match e {
+                                SignalError::NoSuchProcess => t.signal_no_such_process,
+                                SignalError::PermissionDenied => t.signal_permission_denied,
+                                SignalError::Unsupported => t.signal_unsupported,
                             };
-                            self.avisar(
-                                format!("{} {nombre}: {motivo}", t.aviso_no_se_pudo_terminar),
+                            self.notify(
+                                format!("{} {name}: {reason}", t.notice_could_not_terminate),
                                 true,
                             )
                         }
                     }
                 }
-                self.modo = Modo::Normal;
+                self.mode = Mode::Normal;
             }
-            Modo::Buscando => match k.code {
+            Mode::Searching => match k.code {
                 KeyCode::Esc => {
-                    self.busqueda.clear();
-                    self.modo = Modo::Normal;
-                    self.al_inicio();
+                    self.search.clear();
+                    self.mode = Mode::Normal;
+                    self.reset_selection();
                 }
-                KeyCode::Enter => self.modo = Modo::Normal,
+                KeyCode::Enter => self.mode = Mode::Normal,
                 KeyCode::Backspace => {
-                    self.busqueda.pop();
-                    self.al_inicio();
+                    self.search.pop();
+                    self.reset_selection();
                 }
-                KeyCode::Up => self.mover(-1),
-                KeyCode::Down => self.mover(1),
+                KeyCode::Up => self.move_selection(-1),
+                KeyCode::Down => self.move_selection(1),
                 KeyCode::Char(c) => {
-                    self.busqueda.push(c);
-                    self.al_inicio();
+                    self.search.push(c);
+                    self.reset_selection();
                 }
                 _ => {}
             },
-            Modo::Normal => self.tecla_normal(k),
+            Mode::Normal => self.key_normal(k),
         }
     }
 
-    fn tecla_normal(&mut self, k: KeyEvent) {
-        let i = self.pestana.indice();
-        let n = Pestana::TODAS.len();
+    fn key_normal(&mut self, k: KeyEvent) {
+        let i = self.tab.index();
+        let n = Tab::ALL.len();
         match k.code {
-            KeyCode::Char('q') | KeyCode::Esc => self.salir = true,
-            KeyCode::Char('?') => self.modo = Modo::Ayuda,
-            KeyCode::Tab | KeyCode::Right | KeyCode::Char('l') => {
-                self.ir_a(Pestana::TODAS[(i + 1) % n])
-            }
+            KeyCode::Char('q') | KeyCode::Esc => self.quit = true,
+            KeyCode::Char('?') => self.mode = Mode::Help,
+            KeyCode::Tab | KeyCode::Right | KeyCode::Char('l') => self.go_to(Tab::ALL[(i + 1) % n]),
             KeyCode::BackTab | KeyCode::Left | KeyCode::Char('h') => {
-                self.ir_a(Pestana::TODAS[(i + n - 1) % n])
+                self.go_to(Tab::ALL[(i + n - 1) % n])
             }
-            KeyCode::Char(c @ '1'..='7') => self.ir_a(Pestana::TODAS[c as usize - '1' as usize]),
-            KeyCode::Char(' ') => self.pausado = !self.pausado,
-            _ if self.pestana == Pestana::Procesos => self.tecla_procesos(k),
+            KeyCode::Char(c @ '1'..='7') => self.go_to(Tab::ALL[c as usize - '1' as usize]),
+            KeyCode::Char(' ') => self.paused = !self.paused,
+            _ if self.tab == Tab::Processes => self.key_processes(k),
             _ => {}
         }
     }
 
-    fn tecla_procesos(&mut self, k: KeyEvent) {
+    fn key_processes(&mut self, k: KeyEvent) {
         match k.code {
-            KeyCode::Up | KeyCode::Char('k') => self.mover(-1),
-            KeyCode::Down | KeyCode::Char('j') => self.mover(1),
-            KeyCode::PageUp => self.mover(-15),
-            KeyCode::PageDown => self.mover(15),
-            KeyCode::Home | KeyCode::Char('g') => self.mover(isize::MIN),
-            KeyCode::End | KeyCode::Char('G') => self.mover(isize::MAX),
-            KeyCode::Char('/') => self.modo = Modo::Buscando,
-            KeyCode::Char('c') => self.ordenar(OrdenProc::Cpu),
-            KeyCode::Char('m') => self.ordenar(OrdenProc::Memoria),
-            KeyCode::Char('p') => self.ordenar(OrdenProc::Pid),
-            KeyCode::Char('n') => self.ordenar(OrdenProc::Nombre),
-            KeyCode::Char('u') => self.ordenar(OrdenProc::Usuario),
+            KeyCode::Up | KeyCode::Char('k') => self.move_selection(-1),
+            KeyCode::Down | KeyCode::Char('j') => self.move_selection(1),
+            KeyCode::PageUp => self.move_selection(-15),
+            KeyCode::PageDown => self.move_selection(15),
+            KeyCode::Home | KeyCode::Char('g') => self.move_selection(isize::MIN),
+            KeyCode::End | KeyCode::Char('G') => self.move_selection(isize::MAX),
+            KeyCode::Char('/') => self.mode = Mode::Searching,
+            KeyCode::Char('c') => self.sort_by(ProcessSort::Cpu),
+            KeyCode::Char('m') => self.sort_by(ProcessSort::Memory),
+            KeyCode::Char('p') => self.sort_by(ProcessSort::Pid),
+            KeyCode::Char('n') => self.sort_by(ProcessSort::Name),
+            KeyCode::Char('u') => self.sort_by(ProcessSort::User),
             KeyCode::Char('o') => {
-                self.solo_mios = !self.solo_mios;
-                self.al_inicio();
+                self.mine_only = !self.mine_only;
+                self.reset_selection();
             }
             KeyCode::Char('x') => {
-                self.busqueda.clear();
-                self.solo_mios = false;
-                self.al_inicio();
+                self.search.clear();
+                self.mine_only = false;
+                self.reset_selection();
             }
             KeyCode::Char('t') | KeyCode::Char('K') | KeyCode::F(9) => {
-                if let Some(p) = self.seleccionado() {
-                    self.modo = Modo::Confirmar {
+                if let Some(p) = self.selected() {
+                    self.mode = Mode::Confirm {
                         pid: p.pid,
-                        nombre: p.nombre.clone(),
-                        forzar: k.code == KeyCode::Char('K'),
+                        name: p.name.clone(),
+                        force: k.code == KeyCode::Char('K'),
                     };
                 }
             }

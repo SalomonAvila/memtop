@@ -18,6 +18,7 @@ The interface and messages are available in English and Spanish (see [`--lang`](
 - [Keys](#keys)
 - [Data and permissions](#data-and-permissions)
 - [Development](#development)
+- [Contributing](#contributing)
 - [License](#license)
 
 ## Screen
@@ -265,9 +266,13 @@ cargo clippy --all-targets -- -D warnings
 ```
 memtop/
 ├── .copr/Makefile              Builds the SRPM for COPR
-├── .github/workflows/
-│   ├── ci.yml                  Format, clippy, tests, static binaries and RPMs on every push
-│   └── release.yml             Publishes binaries when a vX.Y.Z tag is pushed
+├── .github/
+│   ├── CODEOWNERS              Every change needs the maintainer's review
+│   ├── ISSUE_TEMPLATE/         Bug report and feature request forms
+│   ├── pull_request_template.md
+│   └── workflows/
+│       ├── ci.yml              Format, clippy, tests, static binaries and RPMs on every push
+│       └── release.yml         Publishes binaries when a vX.Y.Z tag is pushed
 ├── data/
 │   └── pci-gpu.ids             Extract of pci.ids with the GPU vendors
 ├── packaging/
@@ -285,10 +290,13 @@ memtop/
 │   ├── pci.rs                  GPU names from the bundled PCI database
 │   └── logo.rs                 memtop logo in pixel art
 ├── CHANGELOG.md                Changes in each version
+├── CODE_OF_CONDUCT.md
+├── CONTRIBUTING.md             How to contribute
 ├── config.example.toml         Configuration template (also via memtop --print-config)
 ├── Cargo.toml
 ├── Cargo.lock
 ├── LICENSE
+├── SECURITY.md                 How to report vulnerabilities
 └── THIRD_PARTY_NOTICES.md      Licenses of third-party data and crates
 ```
 
@@ -312,6 +320,13 @@ scripts/update-pci-ids.sh /usr/share/hwdata/pci.ids  # or uses a local copy
    ```
 3. The `release.yml` workflow checks that the tag matches `Cargo.toml`, creates the release
    and attaches the static binaries with their SHA-256 sums.
+
+## Contributing
+
+Contributions are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull
+request (against `develop`), and report security problems privately as described in
+[SECURITY.md](SECURITY.md). Everyone taking part is expected to follow the
+[Code of Conduct](CODE_OF_CONDUCT.md).
 
 ## License
 

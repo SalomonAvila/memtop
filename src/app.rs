@@ -234,7 +234,7 @@ impl App {
 
     fn ir_a(&mut self, p: Pestana) {
         self.pestana = p;
-        gpu::CONSULTAR_NVIDIA.store(p == Pestana::Gpu, std::sync::atomic::Ordering::Relaxed);
+        gpu::QUERY_NVIDIA.store(p == Pestana::Gpu, std::sync::atomic::Ordering::Relaxed);
     }
 
     fn ordenar(&mut self, o: OrdenProc) {

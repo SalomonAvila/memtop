@@ -222,7 +222,7 @@ impl Monitor {
             nombres_usuario,
             ultimo: Instant::now(),
             info,
-            gpus: gpu::detectar(),
+            gpus: gpu::detect(),
             sys,
             cpu_total: 0.0,
             cpu_nucleos: Vec::new(),
@@ -370,7 +370,7 @@ impl Monitor {
             .collect();
 
         self.bateria = leer_bateria();
-        gpu::actualizar(&mut self.gpus);
+        gpu::refresh(&mut self.gpus);
 
         let empujar = |h: &mut VecDeque<u64>, v: u64| {
             if h.len() == HISTORIAL {

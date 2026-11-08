@@ -377,11 +377,7 @@ fn panel_sistema(app: &App) -> Vec<Line<'static>> {
         w,
     ));
     for g in &m.gpus {
-        l.push(clave_valor(
-            t.gpu,
-            format!("{} {}", g.fabricante, g.nombre),
-            w,
-        ));
+        l.push(clave_valor(t.gpu, format!("{} {}", g.vendor, g.name), w));
     }
     l.push(clave_valor(
         t.memoria,
@@ -530,14 +526,14 @@ fn tab_resumen(f: &mut Frame, app: &mut App, area: Rect) {
     // GPU, red, batería
     let mut lineas = Vec::new();
     for g in &m.gpus {
-        let estado = if g.suspendida() {
+        let estado = if g.is_suspended() {
             Span::styled(t.gpu_en_reposo, Style::new().fg(tema().tenue))
         } else {
             Span::styled(t.gpu_activa, Style::new().fg(Color::Green))
         };
         lineas.push(Line::from(vec![
             Span::styled(format!("{:<9}", t.gpu), Style::new().fg(tema().etiqueta)),
-            Span::raw(format!("{} · ", g.nombre)),
+            Span::raw(format!("{} · ", g.name)),
             estado,
         ]));
     }
@@ -925,16 +921,16 @@ fn tab_gpu(f: &mut Frame, app: &mut App, area: Rect) {
     for (g, a) in gpus.iter().zip(areas.iter()) {
         let w = 13;
         let ancho = a.width.saturating_sub(2);
-        let estado = match g.estado.as_deref() {
+        let estado = match g.power_state.as_deref() {
             Some("suspended") => Span::styled(tx.gpu_estado_reposo, Style::new().fg(tema().tenue)),
             Some("active") => Span::styled(tx.gpu_estado_activa, Style::new().fg(Color::Green)),
             Some(o) => Span::raw(o.to_string()),
             None => Span::raw("—"),
         };
         let mut l = vec![
-            clave_valor(tx.fabricante, g.fabricante.clone(), w),
+            clave_valor(tx.fabricante, g.vendor.clone(), w),
             clave_valor(tx.driver, g.driver.clone().unwrap_or_else(|| "—".into()), w),
-            clave_valor(tx.pci, g.direccion.clone(), w),
+            clave_valor(tx.pci, g.address.clone(), w),
             Line::from(vec![
                 Span::styled(
                     format!("{:<w$}", tx.estado),
@@ -943,10 +939,10 @@ fn tab_gpu(f: &mut Frame, app: &mut App, area: Rect) {
                 estado,
             ]),
         ];
-        if let Some(u) = g.uso {
+        if let Some(u) = g.usage {
             l.push(barra(tx.uso, w, ancho, u as f64, format!("{u:.0}%")));
         }
-        if let (Some(u), Some(t)) = (g.vram_usada, g.vram_total) {
+        if let (Some(u), Some(t)) = (g.vram_used, g.vram_total) {
             l.push(barra(
                 tx.vram,
                 w,
@@ -955,35 +951,32 @@ fn tab_gpu(f: &mut Frame, app: &mut App, area: Rect) {
                 format!("{} / {}", fmt_bytes(u), fmt_bytes(t)),
             ));
         }
-        if let Some(fr) = g.frecuencia_mhz {
+        if let Some(fr) = g.clock_mhz {
             let max = g
-                .frecuencia_max_mhz
+                .max_clock_mhz
                 .map(|m| format!(" / {m} MHz"))
                 .unwrap_or_default();
             l.push(clave_valor(tx.frecuencia, format!("{fr} MHz{max}"), w));
         }
-        if let Some(t) = g.temperatura {
+        if let Some(t) = g.temperature {
             l.push(clave_temp(tx.temperatura, t, w));
         }
-        if let Some(p) = g.consumo_w {
+        if let Some(p) = g.power_w {
             l.push(clave_valor(tx.consumo, format!("{p:.1} W"), w));
         }
-        if g.fabricante.contains("NVIDIA") && g.uso.is_none() && !g.suspendida() {
+        if g.vendor.contains("NVIDIA") && g.usage.is_none() && !g.is_suspended() {
             l.push(Line::styled(
                 tx.gpu_consultando,
                 Style::new().fg(tema().tenue),
             ));
         }
-        if g.suspendida() {
+        if g.is_suspended() {
             l.push(Line::styled(
                 tx.gpu_no_despertar,
                 Style::new().fg(tema().tenue).add_modifier(Modifier::ITALIC),
             ));
         }
-        f.render_widget(
-            Paragraph::new(l).block(bloque(format!(" {} ", g.nombre))),
-            *a,
-        );
+        f.render_widget(Paragraph::new(l).block(bloque(format!(" {} ", g.name))), *a);
     }
 }
 

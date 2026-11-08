@@ -322,6 +322,9 @@ pub struct Textos {
     pub sistema_sin_discos: &'static str,
     pub sistema_sin_red: &'static str,
     pub sistema_sin_sensores: &'static str,
+
+    // GPU sin nombre en la base PCI
+    pub fabricante_desconocido: &'static str,
 }
 
 pub const ES: Textos = Textos {
@@ -539,6 +542,9 @@ Dentro de memtop pulsa ? para ver todas las teclas.
     sistema_sin_discos: "no se pudieron leer los discos",
     sistema_sin_red: "no se pudo leer la red",
     sistema_sin_sensores: "no se pudieron leer los sensores",
+
+    // GPU sin nombre en la base PCI
+    fabricante_desconocido: "Desconocido",
 };
 
 pub const EN: Textos = Textos {
@@ -756,6 +762,9 @@ Inside memtop, press ? to see every key.
     sistema_sin_discos: "could not read the disks",
     sistema_sin_red: "could not read the network",
     sistema_sin_sensores: "could not read the sensors",
+
+    // GPU sin nombre en la base PCI
+    fabricante_desconocido: "Unknown",
 };
 
 #[cfg(test)]

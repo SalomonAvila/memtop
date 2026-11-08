@@ -14,7 +14,6 @@ distribuye como un único binario estático, sin dependencias del sistema.
 - [Uso](#uso)
 - [Configuración](#configuración)
 - [Teclas](#teclas)
-- [Panel del Pokémon](#panel-del-pokémon)
 - [Datos y permisos](#datos-y-permisos)
 - [Desarrollo](#desarrollo)
 - [Licencia](#licencia)
@@ -25,20 +24,19 @@ distribuye como un único binario estático, sin dependencias del sistema.
 ┌──────────────────────────────────────────────────────────────────────┐
 │ Pestañas: 1 Resumen · 2 CPU · 3 RAM · 4 Almacenamiento · 5 GPU · …   │
 ├──────────────────────┬───────────────────────────────────────────────┤
-│                      │                                               │
-│   Pokémon            │                                               │
-│   (o el logo de      │   Contenido de la pestaña activa              │
-│    memtop)           │   (barras, gráficas de historial, tablas)     │
-│                      │                                               │
-├──────────────────────┤                                               │
 │   Sistema            │                                               │
-│   usuario@equipo,    │                                               │
-│   SO, kernel, CPU,   │                                               │
+│   usuario@equipo,    │   Contenido de la pestaña activa              │
+│   SO, kernel, CPU,   │   (barras, gráficas de historial, tablas)     │
 │   GPU, memoria…      │                                               │
+│                      │                                               │
+│                      │                                               │
 ├──────────────────────┴───────────────────────────────────────────────┤
 │ Atajos de teclado de la pestaña actual                               │
 └──────────────────────────────────────────────────────────────────────┘
 ```
+
+Con `logo = true` en la [configuración](#configuración), el logo de memtop aparece encima
+del panel Sistema.
 
 | # | Pestaña | Contenido |
 |---|---|---|
@@ -105,25 +103,23 @@ cargo build --release --locked --target x86_64-unknown-linux-musl
 # resultado: target/x86_64-unknown-linux-musl/release/memtop
 ```
 
-### Programas opcionales
+### Programa opcional
 
-memtop funciona sin ninguno de ellos; solo amplían lo que muestra.
+memtop funciona sin él; solo amplía lo que muestra.
 
 | Programa | Qué añade | De dónde sale |
 |---|---|---|
 | `nvidia-smi` | Uso, VRAM, temperatura, consumo y frecuencia de GPUs NVIDIA | Se instala junto con el driver propietario de NVIDIA |
-| `pokemon-colorscripts` | Un Pokémon al azar en el panel izquierdo (sin él se ve el logo de memtop) | [gitlab.com/phoneybadger/pokemon-colorscripts](https://gitlab.com/phoneybadger/pokemon-colorscripts) |
 
 ## Uso
 
 ```sh
-memtop                                  # Pokémon al azar si está pokemon-colorscripts
-memtop --sin-pokemon --intervalo 2      # solo el logo, actualizando cada 2 s
+memtop                                  # abre en la pestaña Resumen
+memtop --intervalo 2 --idioma en        # actualiza cada 2 s, interfaz en inglés
 ```
 
 | Opción | Descripción |
 |---|---|
-| `--sin-pokemon` | No mostrar Pokémon aunque `pokemon-colorscripts` esté instalado |
 | `-i`, `--intervalo SEG` | Segundos entre actualizaciones. Por defecto `1`, mínimo `0.2` |
 | `--idioma IDIOMA` | Idioma de la interfaz: `auto` (según `LANG`), `es` o `en` |
 | `-c`, `--config RUTA` | Usar este archivo de configuración en lugar del de por defecto |
@@ -153,7 +149,7 @@ son opcionales:
 | `idioma` | `"auto"` (según `LANGUAGE`, `LC_ALL`, `LC_MESSAGES` o `LANG`), `"es"`, `"en"` | `"auto"` |
 | `intervalo` | Segundos entre actualizaciones, `0.2` o más | `1.0` |
 | `pestana_inicial` | `"resumen"`, `"cpu"`, `"ram"`, `"almacenamiento"`, `"gpu"`, `"red"`, `"procesos"` | `"resumen"` |
-| `pokemon` | `true` / `false` | `true` |
+| `logo` | `true` muestra el logo de memtop encima del panel Sistema; `false` deja que Sistema ocupe toda la columna | `false` |
 | `[procesos] orden` | `"cpu"`, `"memoria"`, `"pid"`, `"nombre"`, `"usuario"` | `"cpu"` |
 | `[procesos] solo_mios` | `true` / `false` | `false` |
 | `[colores] acento` | Color de títulos, pestaña activa y teclas | `"cyan"` |
@@ -163,6 +159,9 @@ son opcionales:
 
 Los colores aceptan nombres (`red`, `lightcyan`, `darkgray`…), hexadecimal (`"#rrggbb"`) o
 un índice de la paleta de 256 colores (`"0"` a `"255"`).
+
+La clave `pokemon` y la opción `--sin-pokemon` de versiones anteriores se siguen aceptando
+para no romper configuraciones existentes, pero ya no hacen nada.
 
 Por ejemplo, para abrir siempre en Procesos, ordenado por memoria y con acento verde:
 
@@ -181,14 +180,14 @@ acento = "green"
 del archivo.
 
 **Errores:** si el archivo tiene un error de sintaxis, una clave desconocida (por ejemplo una
-errata como `pokemn`) o un valor no válido, memtop no arranca y muestra la línea exacta:
+errata como `intervalos`) o un valor no válido, memtop no arranca y muestra la línea exacta:
 
 ```
-memtop: error en ~/.config/memtop/config.toml: TOML parse error at line 3, column 1
+memtop: error en ~/.config/memtop/config.toml: TOML parse error at line 1, column 1
   |
-3 | pokemn = false
-  | ^^^^^^
-unknown field `pokemn`, expected one of `idioma`, `intervalo`, `pestana_inicial`, `pokemon`, `procesos`, `colores`
+1 | intervalos = 2
+  | ^^^^^^^^^^
+unknown field `intervalos`, expected one of `idioma`, `intervalo`, `pestana_inicial`, `logo`, `procesos`, `colores`, `pokemon`
 ```
 
 ## Teclas
@@ -199,7 +198,6 @@ Pulsa `?` dentro de memtop para ver esta lista.
 |---|---|
 | `←` `→`, `Tab`, `Shift+Tab`, `h` `l` | Pestaña anterior / siguiente |
 | `1` … `7` | Ir a una pestaña |
-| `f` | Otro Pokémon al azar |
 | `espacio` | Pausar o reanudar la actualización |
 | `?` | Ayuda |
 | `q`, `Esc`, `Ctrl+C` | Salir |
@@ -220,17 +218,6 @@ En la pestaña **Procesos**:
 
 Al buscar, filtrar u ordenar, la selección vuelve al primer proceso de la lista para que
 nunca quede seleccionado uno que no se ve.
-
-## Panel del Pokémon
-
-El panel izquierdo muestra un Pokémon al azar si `pokemon-colorscripts` está instalado y no
-se usó `--sin-pokemon` (o `pokemon = false`). Con `f` aparece otro. Si no, muestra el logo
-de memtop, incluido en el binario.
-
-El pixel art se convierte en una cuadrícula de píxeles, se le recortan los bordes vacíos y
-se redibuja escalado al panel con caracteres de medio bloque `▀`, así que se ve igual en
-cualquier terminal con color. Si un factor entero (×2, ×3…) llena al menos el 85 % del
-espacio se usa ese, para que se vea nítido; si no, la escala exacta.
 
 ## Datos y permisos
 
@@ -284,7 +271,7 @@ memtop/
 │   ├── sistema.rs              Lectura de CPU, memoria, discos, red, procesos, sensores y batería
 │   ├── gpu.rs                  Detección de GPUs y consulta a nvidia-smi
 │   ├── pci.rs                  Nombres de GPU a partir de la base PCI incluida
-│   └── foto.rs                 Panel del Pokémon, sprites y logo
+│   └── logo.rs                 Logo de memtop en pixel art
 ├── config.ejemplo.toml         Plantilla de configuración (también en memtop --config-ejemplo)
 ├── Cargo.toml
 ├── Cargo.lock
@@ -320,7 +307,3 @@ Código bajo licencia [MIT](LICENSE).
 bajo GPL-2.0-or-later o BSD-3-Clause a elección; memtop la usa bajo BSD-3-Clause. El texto
 completo está en [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md), que se incluye en cada
 release.
-
-Pokémon es una marca de Nintendo, Game Freak y The Pokémon Company. memtop no incluye
-imágenes de Pokémon: solo muestra lo que genera `pokemon-colorscripts` si el usuario lo
-tiene instalado.

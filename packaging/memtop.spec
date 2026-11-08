@@ -31,8 +31,7 @@ BuildRequires:  rust >= 1.95
 memtop combines a system summary (model, OS, kernel, CPU, GPU, memory...) with a
 live monitor of CPU, memory, disks, GPU, network and processes, in tabs. It only
 reads local information: it needs no root, writes no files and does not use the
-network. Optionally shows a random Pokémon if pokemon-colorscripts is installed,
-and GPU usage on NVIDIA if nvidia-smi is available.}
+network. Optionally shows GPU usage on NVIDIA if nvidia-smi is available.}
 
 %description %{_description}
 
@@ -40,8 +39,8 @@ and GPU usage on NVIDIA if nvidia-smi is available.}
 memtop combina un resumen del equipo (modelo, sistema operativo, kernel, CPU, GPU,
 memoria...) con un monitor en vivo de CPU, memoria, discos, GPU, red y procesos, en
 pestañas. Solo lee información local: no necesita root, no escribe archivos y no usa
-la red. Opcionalmente muestra un Pokémon al azar si pokemon-colorscripts está
-instalado, y el uso de la GPU en NVIDIA si nvidia-smi está disponible.
+la red. Opcionalmente muestra el uso de la GPU en NVIDIA si nvidia-smi está
+disponible.
 
 %prep
 %autosetup -n %{name}-%{version} -p1 -a1

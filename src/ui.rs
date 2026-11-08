@@ -276,12 +276,12 @@ fn dibujar_logo(f: &mut Frame, area: Rect) {
 /// Dibuja el sprite escalado (vecino más cercano) y centrado en `area`,
 /// usando `▀`/`▄` para meter dos píxeles por celda.
 fn dibujar_sprite(f: &mut Frame, sp: &Sprite, area: Rect) {
-    let s = sp.escala(area.width, area.height);
+    let s = sp.scale(area.width, area.height);
     if s <= 0.0 {
         return;
     }
-    let ancho = ((sp.ancho as f64 * s).round() as u16).min(area.width);
-    let alto_px = ((sp.alto as f64 * s).round() as u16).min(area.height * 2);
+    let ancho = ((sp.width as f64 * s).round() as u16).min(area.width);
+    let alto_px = ((sp.height as f64 * s).round() as u16).min(area.height * 2);
     let filas = alto_px.div_ceil(2);
     let x0 = area.x + (area.width - ancho) / 2;
     let y0 = area.y + (area.height - filas) / 2;
@@ -290,10 +290,10 @@ fn dibujar_sprite(f: &mut Frame, sp: &Sprite, area: Rect) {
     let buf = f.buffer_mut();
     for cy in 0..filas {
         for cx in 0..ancho {
-            let sx = fuente(cx, sp.ancho);
-            let arriba = sp.pixel(sx, fuente(cy * 2, sp.alto));
+            let sx = fuente(cx, sp.width);
+            let arriba = sp.pixel(sx, fuente(cy * 2, sp.height));
             let abajo = if cy * 2 + 1 < alto_px {
-                sp.pixel(sx, fuente(cy * 2 + 1, sp.alto))
+                sp.pixel(sx, fuente(cy * 2 + 1, sp.height))
             } else {
                 None
             };

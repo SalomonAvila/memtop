@@ -45,13 +45,13 @@ impl Pestana {
     pub fn titulo(self) -> &'static str {
         let t = i18n::t();
         match self {
-            Pestana::Resumen => t.pestana_resumen,
-            Pestana::Cpu => t.pestana_cpu,
-            Pestana::Ram => t.pestana_ram,
-            Pestana::Almacenamiento => t.pestana_almacenamiento,
-            Pestana::Gpu => t.pestana_gpu,
-            Pestana::Red => t.pestana_red,
-            Pestana::Procesos => t.pestana_procesos,
+            Pestana::Resumen => t.tab_summary,
+            Pestana::Cpu => t.tab_cpu,
+            Pestana::Ram => t.tab_ram,
+            Pestana::Almacenamiento => t.tab_storage,
+            Pestana::Gpu => t.tab_gpu,
+            Pestana::Red => t.tab_network,
+            Pestana::Procesos => t.tab_processes,
         }
     }
     fn indice(self) -> usize {
@@ -273,18 +273,18 @@ impl App {
                             format!(
                                 "{} {} {nombre} ({pid})",
                                 if forzar { "SIGKILL" } else { "SIGTERM" },
-                                t.aviso_enviado_a
+                                t.notice_sent_to
                             ),
                             false,
                         ),
                         Err(e) => {
                             let motivo = match e {
-                                ErrorSenal::NoExiste => t.senal_no_existe,
-                                ErrorSenal::SinPermiso => t.senal_sin_permiso,
-                                ErrorSenal::NoSoportada => t.senal_no_soportada,
+                                ErrorSenal::NoExiste => t.signal_no_such_process,
+                                ErrorSenal::SinPermiso => t.signal_permission_denied,
+                                ErrorSenal::NoSoportada => t.signal_unsupported,
                             };
                             self.avisar(
-                                format!("{} {nombre}: {motivo}", t.aviso_no_se_pudo_terminar),
+                                format!("{} {nombre}: {motivo}", t.notice_could_not_terminate),
                                 true,
                             )
                         }

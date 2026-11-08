@@ -207,7 +207,7 @@ pub struct Monitor {
 impl Monitor {
     /// Hace la primera lectura completa. Solo falla si el sistema no expone `/proc`.
     pub fn new() -> Result<Self> {
-        let mut sys = System::new_all().context(i18n::t().sistema_sin_info)?;
+        let mut sys = System::new_all().context(i18n::t().system_no_info)?;
         sys.refresh_all();
         let info = leer_info(&sys);
         let nombres_usuario = Users::new_with_refreshed_list()
@@ -215,10 +215,10 @@ impl Monitor {
             .unwrap_or_default();
 
         let mut m = Self {
-            discos_sys: Disks::new_with_refreshed_list().context(i18n::t().sistema_sin_discos)?,
-            redes: Networks::new_with_refreshed_list().context(i18n::t().sistema_sin_red)?,
+            discos_sys: Disks::new_with_refreshed_list().context(i18n::t().system_no_disks)?,
+            redes: Networks::new_with_refreshed_list().context(i18n::t().system_no_network)?,
             componentes: Components::new_with_refreshed_list()
-                .context(i18n::t().sistema_sin_sensores)?,
+                .context(i18n::t().system_no_sensors)?,
             nombres_usuario,
             ultimo: Instant::now(),
             info,

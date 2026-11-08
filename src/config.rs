@@ -18,7 +18,7 @@ use serde::{Deserialize, Deserializer, de};
 
 use crate::{
     app::{OrdenProc, Pestana},
-    i18n::{self, Preferencia},
+    i18n::{self, LanguageSetting},
 };
 
 /// Plantilla documentada; coincide con los valores por defecto (lo comprueba una prueba).
@@ -32,7 +32,7 @@ pub const INTERVALO_MINIMO: f64 = 0.2;
 pub struct Config {
     /// Idioma de la interfaz.
     #[serde(rename = "language")]
-    pub idioma: Preferencia,
+    pub idioma: LanguageSetting,
     /// Segundos entre actualizaciones.
     #[serde(rename = "interval")]
     pub intervalo: f64,
@@ -73,7 +73,7 @@ pub struct Tema {
 impl Default for Config {
     fn default() -> Self {
         Self {
-            idioma: Preferencia::Auto,
+            idioma: LanguageSetting::Auto,
             intervalo: 1.0,
             pestana_inicial: Pestana::Resumen,
             logo: false,
@@ -110,7 +110,7 @@ impl Config {
 
     fn validar(self) -> Result<Self> {
         if !self.intervalo.is_finite() || self.intervalo < INTERVALO_MINIMO {
-            bail!("{} {INTERVALO_MINIMO}", i18n::t().config_intervalo_minimo);
+            bail!("{} {INTERVALO_MINIMO}", i18n::t().config_min_interval);
         }
         Ok(self)
     }
@@ -122,7 +122,7 @@ fn color<'de, D: Deserializer<'de>>(d: D) -> Result<Color, D::Error> {
         let t = i18n::t();
         de::Error::custom(format!(
             "{}: {texto:?} ({})",
-            t.config_color_invalido, t.config_color_formatos
+            t.config_invalid_color, t.config_color_formats
         ))
     })
 }
@@ -160,11 +160,11 @@ pub fn cargar(ruta: Option<&Path>) -> Result<Config> {
         Err(e) if e.kind() == ErrorKind::NotFound && !obligatoria => return Ok(Config::default()),
         Err(e) => {
             return Err(e).with_context(|| {
-                format!("{} {}", i18n::t().config_no_se_pudo_leer, ruta.display())
+                format!("{} {}", i18n::t().config_could_not_read, ruta.display())
             });
         }
     };
-    interpretar(&texto).with_context(|| format!("{} {}", i18n::t().config_error_en, ruta.display()))
+    interpretar(&texto).with_context(|| format!("{} {}", i18n::t().config_error_in, ruta.display()))
 }
 
 #[cfg(test)]
@@ -200,7 +200,7 @@ mod tests {
             "##,
         )
         .unwrap();
-        assert_eq!(c.idioma, Preferencia::En);
+        assert_eq!(c.idioma, LanguageSetting::En);
         assert_eq!(c.intervalo(), Duration::from_millis(2500));
         assert_eq!(c.pestana_inicial, Pestana::Procesos);
         assert!(c.logo);

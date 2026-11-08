@@ -1,11 +1,11 @@
-//! Idioma de la interfaz y textos traducidos.
+//! Interface language and translated text.
 //!
-//! El idioma se elige al arrancar con [`fijar`], a partir de la opción
-//! `--lang`, la clave `language` de la configuración o, si ambas son `auto`, del entorno
-//! ([`detectar`]). Los textos se obtienen con [`t`], que devuelve la tabla del idioma activo.
+//! The language is chosen at startup with [`set`], from the `--lang` option, the `language`
+//! configuration key or, when both are `auto`, the environment ([`detect`]). Text is read
+//! with [`t`], which returns the table for the active language.
 //!
-//! Para añadir un texto: crea el campo en [`Textos`] y dale valor en [`ES`] y [`EN`].
-//! El compilador obliga a traducirlo en los dos idiomas.
+//! To add a text: create the field in [`Texts`] and give it a value in [`ES`] and [`EN`].
+//! The compiler makes sure it is translated in both languages.
 
 use std::{
     env,
@@ -15,110 +15,111 @@ use std::{
 
 use serde::Deserialize;
 
-/// Idiomas disponibles.
+/// Available languages.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Idioma {
+pub enum Language {
     Es,
     En,
 }
 
-/// Idioma pedido por el usuario en la configuración (`language`) o en `--lang`.
+/// Language requested by the user in the configuration (`language`) or with `--lang`.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "lowercase")]
-pub enum Preferencia {
-    /// Detectar del entorno (`LANG`…).
+pub enum LanguageSetting {
+    /// Detect from the environment (`LANG`…).
     #[default]
     Auto,
     Es,
     En,
 }
 
-impl Preferencia {
-    pub fn resolver(self) -> Idioma {
+impl LanguageSetting {
+    pub fn resolve(self) -> Language {
         match self {
-            Preferencia::Auto => detectar(),
-            Preferencia::Es => Idioma::Es,
-            Preferencia::En => Idioma::En,
+            LanguageSetting::Auto => detect(),
+            LanguageSetting::Es => Language::Es,
+            LanguageSetting::En => Language::En,
         }
     }
 }
 
-impl FromStr for Preferencia {
+impl FromStr for LanguageSetting {
     type Err = ();
 
     fn from_str(s: &str) -> Result<Self, ()> {
         match s.to_lowercase().as_str() {
-            "auto" => Ok(Preferencia::Auto),
-            "es" => Ok(Preferencia::Es),
-            "en" => Ok(Preferencia::En),
+            "auto" => Ok(LanguageSetting::Auto),
+            "es" => Ok(LanguageSetting::Es),
+            "en" => Ok(LanguageSetting::En),
             _ => Err(()),
         }
     }
 }
 
-/// Idioma activo: `0` = aún sin fijar (se detecta del entorno), `1` = español, `2` = inglés.
+/// Active language: `0` = not set yet (detected from the environment), `1` = Spanish,
+/// `2` = English.
 ///
-/// Se puede fijar más de una vez porque el idioma se va precisando al arrancar: primero el
-/// del entorno (errores de las opciones), luego el de `--lang` (errores del archivo de
-/// configuración) y por último el resultado de combinar archivo y opciones.
-static IDIOMA: AtomicU8 = AtomicU8::new(0);
+/// It can be set more than once because the language is refined at startup: first the
+/// environment's (option errors), then `--lang` (configuration file errors) and finally the
+/// result of combining the file and the options.
+static LANGUAGE: AtomicU8 = AtomicU8::new(0);
 
-/// Fija el idioma de los textos a partir de este momento.
-pub fn fijar(idioma: Idioma) {
-    let v = match idioma {
-        Idioma::Es => 1,
-        Idioma::En => 2,
+/// Sets the language of the text from now on.
+pub fn set(language: Language) {
+    let v = match language {
+        Language::Es => 1,
+        Language::En => 2,
     };
-    IDIOMA.store(v, Ordering::Relaxed);
+    LANGUAGE.store(v, Ordering::Relaxed);
 }
 
-/// Idioma activo: el fijado con [`fijar`] o, si no se fijó, el del entorno.
-pub fn actual() -> Idioma {
-    match IDIOMA.load(Ordering::Relaxed) {
-        1 => Idioma::Es,
-        2 => Idioma::En,
+/// Active language: the one given to [`set`] or, if none was, the environment's.
+pub fn current() -> Language {
+    match LANGUAGE.load(Ordering::Relaxed) {
+        1 => Language::Es,
+        2 => Language::En,
         _ => {
-            let idioma = detectar();
-            fijar(idioma);
-            idioma
+            let language = detect();
+            set(language);
+            language
         }
     }
 }
 
-/// Textos del idioma activo.
-pub fn t() -> &'static Textos {
-    match actual() {
-        Idioma::Es => &ES,
-        Idioma::En => &EN,
+/// Text for the active language.
+pub fn t() -> &'static Texts {
+    match current() {
+        Language::Es => &ES,
+        Language::En => &EN,
     }
 }
 
-/// Idioma según las variables de entorno, en el orden de prioridad de gettext:
-/// `LANGUAGE`, `LC_ALL`, `LC_MESSAGES` y `LANG`. Español si el idioma es `es`;
-/// inglés en cualquier otro caso (incluido el locale `C`/`POSIX`).
-pub fn detectar() -> Idioma {
-    detectar_con(|clave| env::var(clave).ok())
+/// Language from the environment variables, in gettext's order of precedence:
+/// `LANGUAGE`, `LC_ALL`, `LC_MESSAGES` and `LANG`. Spanish if the language is `es`;
+/// English otherwise (including the `C`/`POSIX` locale).
+pub fn detect() -> Language {
+    detect_with(|key| env::var(key).ok())
 }
 
-fn detectar_con(var: impl Fn(&str) -> Option<String>) -> Idioma {
+fn detect_with(var: impl Fn(&str) -> Option<String>) -> Language {
     let locale = ["LC_ALL", "LC_MESSAGES", "LANG"]
         .iter()
         .find_map(|k| var(k).filter(|v| !v.is_empty()));
-    // gettext ignora LANGUAGE si el locale es C/POSIX.
-    let es_c = locale
+    // gettext ignores LANGUAGE when the locale is C/POSIX.
+    let is_c = locale
         .as_deref()
         .is_none_or(|l| l == "C" || l == "POSIX" || l.starts_with("C."));
-    let preferido = var("LANGUAGE")
-        .filter(|v| !v.is_empty() && !es_c)
+    let preferred = var("LANGUAGE")
+        .filter(|v| !v.is_empty() && !is_c)
         .and_then(|v| v.split(':').next().map(str::to_string));
-    match preferido.or(locale) {
-        Some(v) if codigo(&v) == "es" => Idioma::Es,
-        _ => Idioma::En,
+    match preferred.or(locale) {
+        Some(v) if language_code(&v) == "es" => Language::Es,
+        _ => Language::En,
     }
 }
 
 /// `"es_CO.UTF-8@euro"` → `"es"`.
-fn codigo(locale: &str) -> String {
+fn language_code(locale: &str) -> String {
     locale
         .split(['_', '.', '@', '-'])
         .next()
@@ -126,381 +127,381 @@ fn codigo(locale: &str) -> String {
         .to_lowercase()
 }
 
-/// Todos los textos de la interfaz en un idioma.
-pub struct Textos {
-    // Pestañas
-    pub pestana_resumen: &'static str,
-    pub pestana_cpu: &'static str,
-    pub pestana_ram: &'static str,
-    pub pestana_almacenamiento: &'static str,
-    pub pestana_gpu: &'static str,
-    pub pestana_red: &'static str,
-    pub pestana_procesos: &'static str,
+/// Every text of the interface in one language.
+pub struct Texts {
+    // Tabs
+    pub tab_summary: &'static str,
+    pub tab_cpu: &'static str,
+    pub tab_ram: &'static str,
+    pub tab_storage: &'static str,
+    pub tab_gpu: &'static str,
+    pub tab_network: &'static str,
+    pub tab_processes: &'static str,
 
-    // Barra superior
-    pub pausa: &'static str,
+    // Top bar
+    pub paused: &'static str,
 
-    // Panel de sistema
-    pub titulo_sistema: &'static str,
-    pub equipo: &'static str,
-    pub so: &'static str,
+    // System panel
+    pub title_system: &'static str,
+    pub machine: &'static str,
+    pub os: &'static str,
     pub kernel: &'static str,
-    pub encendido: &'static str,
-    pub escritorio: &'static str,
+    pub uptime: &'static str,
+    pub desktop: &'static str,
     pub shell: &'static str,
     pub terminal: &'static str,
     pub cpu: &'static str,
     pub gpu: &'static str,
-    pub memoria: &'static str,
-    pub disco_raiz: &'static str,
-    pub bateria: &'static str,
+    pub memory: &'static str,
+    pub root_disk: &'static str,
+    pub battery: &'static str,
 
-    // Estado de la batería
-    pub bateria_cargando: &'static str,
-    pub bateria_descargando: &'static str,
-    pub bateria_completa: &'static str,
-    pub bateria_sin_cargar: &'static str,
-    pub bateria_desconocido: &'static str,
+    // Battery state
+    pub battery_charging: &'static str,
+    pub battery_discharging: &'static str,
+    pub battery_full: &'static str,
+    pub battery_not_charging: &'static str,
+    pub battery_unknown: &'static str,
 
-    // Pestaña Resumen
-    pub uso: &'static str,
+    // Summary tab
+    pub usage: &'static str,
     pub swap: &'static str,
-    pub titulo_gpu_red_energia: &'static str,
-    pub titulo_top_cpu: &'static str,
-    pub red: &'static str,
-    pub red_sin_conexion: &'static str,
-    pub gpu_activa: &'static str,
-    pub gpu_en_reposo: &'static str,
+    pub title_gpu_network_power: &'static str,
+    pub title_top_cpu: &'static str,
+    pub network: &'static str,
+    pub network_disconnected: &'static str,
+    pub gpu_active: &'static str,
+    pub gpu_idle: &'static str,
 
-    // Columnas de procesos
+    // Process columns
     pub col_pid: &'static str,
-    pub col_nombre: &'static str,
+    pub col_name: &'static str,
     pub col_cpu: &'static str,
     pub col_mem: &'static str,
     pub col_res: &'static str,
-    pub col_usuario: &'static str,
+    pub col_user: &'static str,
 
-    // Pestaña CPU
-    pub titulo_procesador: &'static str,
-    pub modelo: &'static str,
-    pub nucleos: &'static str,
-    pub fisicos: &'static str,
-    pub hilos: &'static str,
-    pub frecuencia: &'static str,
-    pub carga_media: &'static str,
-    pub arquitectura: &'static str,
-    pub temperatura: &'static str,
-    pub uso_total: &'static str,
-    pub ultimos: &'static str,
-    pub titulo_por_hilo: &'static str,
-    pub titulo_sensores: &'static str,
+    // CPU tab
+    pub title_processor: &'static str,
+    pub model: &'static str,
+    pub cores: &'static str,
+    pub physical: &'static str,
+    pub threads: &'static str,
+    pub frequency: &'static str,
+    pub load_average: &'static str,
+    pub architecture: &'static str,
+    pub temperature: &'static str,
+    pub total_usage: &'static str,
+    pub last: &'static str,
+    pub title_per_thread: &'static str,
+    pub title_sensors: &'static str,
 
-    // Pestaña RAM
-    pub usada: &'static str,
+    // RAM tab
+    pub used: &'static str,
     pub cache: &'static str,
     pub total: &'static str,
-    pub disponible: &'static str,
-    pub libre: &'static str,
+    pub available: &'static str,
+    pub free: &'static str,
     pub buffers: &'static str,
-    pub compartida: &'static str,
+    pub shared: &'static str,
     pub swap_total: &'static str,
-    pub swap_usada: &'static str,
-    pub titulo_detalle: &'static str,
-    pub titulo_top_memoria: &'static str,
+    pub swap_used: &'static str,
+    pub title_details: &'static str,
+    pub title_top_memory: &'static str,
 
-    // Pestaña Almacenamiento
-    pub titulo_discos: &'static str,
-    pub col_disco: &'static str,
-    pub col_tipo: &'static str,
-    pub col_tamano: &'static str,
+    // Storage tab
+    pub title_disks: &'static str,
+    pub col_disk: &'static str,
+    pub col_type: &'static str,
+    pub col_size: &'static str,
     pub col_temp: &'static str,
-    pub col_lectura: &'static str,
-    pub col_escritura: &'static str,
-    pub titulo_particiones: &'static str,
-    pub usados: &'static str,
-    pub libres_de: &'static str,
+    pub col_read: &'static str,
+    pub col_write: &'static str,
+    pub title_partitions: &'static str,
+    pub used_space: &'static str,
+    pub free_of: &'static str,
 
-    // Pestaña GPU
-    pub gpu_ninguna: &'static str,
-    pub fabricante: &'static str,
+    // GPU tab
+    pub gpu_none: &'static str,
+    pub vendor: &'static str,
     pub driver: &'static str,
     pub pci: &'static str,
-    pub estado: &'static str,
-    pub gpu_estado_activa: &'static str,
-    pub gpu_estado_reposo: &'static str,
+    pub state: &'static str,
+    pub gpu_state_active: &'static str,
+    pub gpu_state_idle: &'static str,
     pub vram: &'static str,
-    pub consumo: &'static str,
-    pub gpu_consultando: &'static str,
-    pub gpu_no_despertar: &'static str,
+    pub power: &'static str,
+    pub gpu_querying: &'static str,
+    pub gpu_not_waking: &'static str,
 
-    // Pestaña Red
-    pub descarga: &'static str,
-    pub subida: &'static str,
-    pub titulo_interfaces: &'static str,
-    pub col_interfaz: &'static str,
-    pub col_ahora: &'static str,
+    // Network tab
+    pub download: &'static str,
+    pub upload: &'static str,
+    pub title_interfaces: &'static str,
+    pub col_interface: &'static str,
+    pub col_now: &'static str,
     pub col_total: &'static str,
 
-    // Pestaña Procesos
-    pub col_tiempo_cpu: &'static str,
-    pub col_comando: &'static str,
-    pub solo_mios: &'static str,
+    // Processes tab
+    pub col_cpu_time: &'static str,
+    pub col_command: &'static str,
+    pub mine_only: &'static str,
 
-    // Estados de proceso
-    pub proc_ejecutando: &'static str,
-    pub proc_durmiendo: &'static str,
-    pub proc_inactivo: &'static str,
-    pub proc_espera_disco: &'static str,
-    pub proc_detenido: &'static str,
-    pub proc_zombi: &'static str,
-    pub proc_otro: &'static str,
+    // Process states
+    pub proc_running: &'static str,
+    pub proc_sleeping: &'static str,
+    pub proc_idle: &'static str,
+    pub proc_disk_wait: &'static str,
+    pub proc_stopped: &'static str,
+    pub proc_zombie: &'static str,
+    pub proc_other: &'static str,
 
-    // Pie de atajos
-    pub pie_aceptar: &'static str,
-    pub pie_borrar: &'static str,
-    pub pie_mover: &'static str,
-    pub pie_buscar: &'static str,
-    pub pie_ordenar: &'static str,
-    pub pie_terminar: &'static str,
-    pub pie_matar: &'static str,
-    pub pie_pestana: &'static str,
-    pub pie_ir_a: &'static str,
-    pub pie_pausa: &'static str,
-    pub pie_ayuda: &'static str,
-    pub pie_salir: &'static str,
-    pub tecla_espacio: &'static str,
+    // Shortcut footer
+    pub footer_accept: &'static str,
+    pub footer_clear: &'static str,
+    pub footer_move: &'static str,
+    pub footer_search: &'static str,
+    pub footer_sort: &'static str,
+    pub footer_terminate: &'static str,
+    pub footer_kill: &'static str,
+    pub footer_tab: &'static str,
+    pub footer_go_to: &'static str,
+    pub footer_pause: &'static str,
+    pub footer_help: &'static str,
+    pub footer_quit: &'static str,
+    pub key_space: &'static str,
 
-    // Ventana de confirmación
-    pub confirmar_titulo: &'static str,
-    pub confirmar_enviar: &'static str,
-    pub confirmar_a: &'static str,
-    pub confirmar_forzar: &'static str,
-    pub confirmar_opciones: &'static str,
+    // Confirmation dialog
+    pub confirm_title: &'static str,
+    pub confirm_send: &'static str,
+    pub confirm_to: &'static str,
+    pub confirm_force: &'static str,
+    pub confirm_options: &'static str,
 
-    // Avisos al enviar señales
-    pub aviso_enviado_a: &'static str,
-    pub aviso_no_se_pudo_terminar: &'static str,
-    pub senal_no_existe: &'static str,
-    pub senal_sin_permiso: &'static str,
-    pub senal_no_soportada: &'static str,
+    // Notices when sending signals
+    pub notice_sent_to: &'static str,
+    pub notice_could_not_terminate: &'static str,
+    pub signal_no_such_process: &'static str,
+    pub signal_permission_denied: &'static str,
+    pub signal_unsupported: &'static str,
 
-    // Ventana de ayuda
-    pub ayuda_titulo: &'static str,
-    pub ayuda_general: &'static str,
-    pub ayuda_cambiar_pestana: &'static str,
-    pub ayuda_ir_pestana: &'static str,
-    pub ayuda_pausa: &'static str,
-    pub ayuda_salir: &'static str,
-    pub ayuda_mover: &'static str,
-    pub ayuda_buscar: &'static str,
-    pub ayuda_ordenar: &'static str,
-    pub ayuda_invertir: &'static str,
-    pub ayuda_solo_mios: &'static str,
-    pub ayuda_quitar_filtros: &'static str,
-    pub ayuda_terminar: &'static str,
-    pub ayuda_matar: &'static str,
+    // Help dialog
+    pub help_title: &'static str,
+    pub help_general: &'static str,
+    pub help_switch_tab: &'static str,
+    pub help_go_to_tab: &'static str,
+    pub help_pause: &'static str,
+    pub help_quit: &'static str,
+    pub help_move: &'static str,
+    pub help_search: &'static str,
+    pub help_sort: &'static str,
+    pub help_reverse: &'static str,
+    pub help_mine_only: &'static str,
+    pub help_clear_filters: &'static str,
+    pub help_terminate: &'static str,
+    pub help_kill: &'static str,
 
-    // Línea de comandos (`--help` y errores antes de abrir la interfaz)
-    pub cli_ayuda: &'static str,
-    pub cli_prueba_ayuda: &'static str,
-    pub cli_falta_ruta: &'static str,
-    pub cli_falta_idioma: &'static str,
-    pub cli_idioma_invalido: &'static str,
-    pub cli_intervalo_invalido: &'static str,
-    pub cli_opcion_desconocida: &'static str,
-    pub cli_sin_terminal: &'static str,
+    // Command line (`--help` and errors before the interface opens)
+    pub cli_help: &'static str,
+    pub cli_try_help: &'static str,
+    pub cli_missing_path: &'static str,
+    pub cli_missing_lang: &'static str,
+    pub cli_invalid_lang: &'static str,
+    pub cli_invalid_interval: &'static str,
+    pub cli_unknown_option: &'static str,
+    pub cli_no_terminal: &'static str,
 
-    // Errores del archivo de configuración
-    pub config_intervalo_minimo: &'static str,
-    pub config_color_invalido: &'static str,
-    pub config_color_formatos: &'static str,
-    pub config_no_se_pudo_leer: &'static str,
-    pub config_error_en: &'static str,
+    // Configuration file errors
+    pub config_min_interval: &'static str,
+    pub config_invalid_color: &'static str,
+    pub config_color_formats: &'static str,
+    pub config_could_not_read: &'static str,
+    pub config_error_in: &'static str,
 
-    // Errores al leer el sistema
-    pub sistema_sin_info: &'static str,
-    pub sistema_sin_discos: &'static str,
-    pub sistema_sin_red: &'static str,
-    pub sistema_sin_sensores: &'static str,
+    // System read errors
+    pub system_no_info: &'static str,
+    pub system_no_disks: &'static str,
+    pub system_no_network: &'static str,
+    pub system_no_sensors: &'static str,
 
-    // GPU sin nombre en la base PCI
-    pub fabricante_desconocido: &'static str,
+    // GPU missing from the PCI database
+    pub unknown_vendor: &'static str,
 }
 
-pub const ES: Textos = Textos {
-    pestana_resumen: "Resumen",
-    pestana_cpu: "CPU",
-    pestana_ram: "RAM",
-    pestana_almacenamiento: "Almacenamiento",
-    pestana_gpu: "GPU",
-    pestana_red: "Red",
-    pestana_procesos: "Procesos",
+pub const ES: Texts = Texts {
+    tab_summary: "Resumen",
+    tab_cpu: "CPU",
+    tab_ram: "RAM",
+    tab_storage: "Almacenamiento",
+    tab_gpu: "GPU",
+    tab_network: "Red",
+    tab_processes: "Procesos",
 
-    // Barra superior
-    pausa: "PAUSA",
+    // Top bar
+    paused: "PAUSA",
 
-    // Panel de sistema
-    titulo_sistema: "Sistema",
-    equipo: "Equipo",
-    so: "SO",
+    // System panel
+    title_system: "Sistema",
+    machine: "Equipo",
+    os: "SO",
     kernel: "Kernel",
-    encendido: "Encendido",
-    escritorio: "Escritorio",
+    uptime: "Encendido",
+    desktop: "Escritorio",
     shell: "Shell",
     terminal: "Terminal",
     cpu: "CPU",
     gpu: "GPU",
-    memoria: "Memoria",
-    disco_raiz: "Disco (/)",
-    bateria: "Batería",
+    memory: "Memoria",
+    root_disk: "Disco (/)",
+    battery: "Batería",
 
-    // Estado de la batería
-    bateria_cargando: "Cargando",
-    bateria_descargando: "Descargando",
-    bateria_completa: "Completa",
-    bateria_sin_cargar: "Conectada, sin cargar",
-    bateria_desconocido: "Desconocido",
+    // Battery state
+    battery_charging: "Cargando",
+    battery_discharging: "Descargando",
+    battery_full: "Completa",
+    battery_not_charging: "Conectada, sin cargar",
+    battery_unknown: "Desconocido",
 
-    // Pestaña Resumen
-    uso: "Uso",
+    // Summary tab
+    usage: "Uso",
     swap: "Swap",
-    titulo_gpu_red_energia: "GPU · Red · Energía",
-    titulo_top_cpu: "Procesos con más CPU",
-    red: "Red",
-    red_sin_conexion: "sin conexión",
-    gpu_activa: "activa",
-    gpu_en_reposo: "en reposo",
+    title_gpu_network_power: "GPU · Red · Energía",
+    title_top_cpu: "Procesos con más CPU",
+    network: "Red",
+    network_disconnected: "sin conexión",
+    gpu_active: "activa",
+    gpu_idle: "en reposo",
 
-    // Columnas de procesos
+    // Process columns
     col_pid: "PID",
-    col_nombre: "Nombre",
+    col_name: "Nombre",
     col_cpu: "CPU%",
     col_mem: "MEM%",
     col_res: "RES",
-    col_usuario: "Usuario",
+    col_user: "Usuario",
 
-    // Pestaña CPU
-    titulo_procesador: "Procesador",
-    modelo: "Modelo",
-    nucleos: "Núcleos",
-    fisicos: "físicos",
-    hilos: "hilos",
-    frecuencia: "Frecuencia",
-    carga_media: "Carga media",
-    arquitectura: "Arquitectura",
-    temperatura: "Temperatura",
-    uso_total: "Uso total",
-    ultimos: "últimos",
-    titulo_por_hilo: "Por hilo",
-    titulo_sensores: "Sensores",
+    // CPU tab
+    title_processor: "Procesador",
+    model: "Modelo",
+    cores: "Núcleos",
+    physical: "físicos",
+    threads: "hilos",
+    frequency: "Frecuencia",
+    load_average: "Carga media",
+    architecture: "Arquitectura",
+    temperature: "Temperatura",
+    total_usage: "Uso total",
+    last: "últimos",
+    title_per_thread: "Por hilo",
+    title_sensors: "Sensores",
 
-    // Pestaña RAM
-    usada: "Usada",
+    // RAM tab
+    used: "Usada",
     cache: "Caché",
     total: "Total",
-    disponible: "Disponible",
-    libre: "Libre",
+    available: "Disponible",
+    free: "Libre",
     buffers: "Buffers",
-    compartida: "Compartida",
+    shared: "Compartida",
     swap_total: "Swap total",
-    swap_usada: "Swap usada",
-    titulo_detalle: "Detalle",
-    titulo_top_memoria: "Procesos con más memoria",
+    swap_used: "Swap usada",
+    title_details: "Detalle",
+    title_top_memory: "Procesos con más memoria",
 
-    // Pestaña Almacenamiento
-    titulo_discos: "Discos físicos",
-    col_disco: "Disco",
-    col_tipo: "Tipo",
-    col_tamano: "Tamaño",
+    // Storage tab
+    title_disks: "Discos físicos",
+    col_disk: "Disco",
+    col_type: "Tipo",
+    col_size: "Tamaño",
     col_temp: "Temp",
-    col_lectura: "Lectura",
-    col_escritura: "Escritura",
-    titulo_particiones: "Particiones montadas",
-    usados: "usados",
-    libres_de: "libres de",
+    col_read: "Lectura",
+    col_write: "Escritura",
+    title_partitions: "Particiones montadas",
+    used_space: "usados",
+    free_of: "libres de",
 
-    // Pestaña GPU
-    gpu_ninguna: "No se encontró ninguna GPU",
-    fabricante: "Fabricante",
+    // GPU tab
+    gpu_none: "No se encontró ninguna GPU",
+    vendor: "Fabricante",
     driver: "Driver",
     pci: "PCI",
-    estado: "Estado",
-    gpu_estado_activa: "Activa",
-    gpu_estado_reposo: "En reposo (ahorrando energía)",
+    state: "Estado",
+    gpu_state_active: "Activa",
+    gpu_state_idle: "En reposo (ahorrando energía)",
     vram: "VRAM",
-    consumo: "Consumo",
-    gpu_consultando: "Consultando nvidia-smi…",
-    gpu_no_despertar: "No se le consulta nada para no despertarla.",
+    power: "Consumo",
+    gpu_querying: "Consultando nvidia-smi…",
+    gpu_not_waking: "No se le consulta nada para no despertarla.",
 
-    // Pestaña Red
-    descarga: "Descarga",
-    subida: "Subida",
-    titulo_interfaces: "Interfaces",
-    col_interfaz: "Interfaz",
-    col_ahora: "ahora",
+    // Network tab
+    download: "Descarga",
+    upload: "Subida",
+    title_interfaces: "Interfaces",
+    col_interface: "Interfaz",
+    col_now: "ahora",
     col_total: "total",
 
-    // Pestaña Procesos
-    col_tiempo_cpu: "T. CPU",
-    col_comando: "Comando",
-    solo_mios: "solo míos",
+    // Processes tab
+    col_cpu_time: "T. CPU",
+    col_command: "Comando",
+    mine_only: "solo míos",
 
-    // Estados de proceso
-    proc_ejecutando: "Activo",
-    proc_durmiendo: "Durmiendo",
-    proc_inactivo: "Inactivo",
-    proc_espera_disco: "E/S disco",
-    proc_detenido: "Detenido",
-    proc_zombi: "Zombi",
-    proc_otro: "Otro",
+    // Process states
+    proc_running: "Activo",
+    proc_sleeping: "Durmiendo",
+    proc_idle: "Inactivo",
+    proc_disk_wait: "E/S disco",
+    proc_stopped: "Detenido",
+    proc_zombie: "Zombi",
+    proc_other: "Otro",
 
-    // Pie de atajos
-    pie_aceptar: "aceptar",
-    pie_borrar: "borrar",
-    pie_mover: "mover",
-    pie_buscar: "buscar",
-    pie_ordenar: "ordenar",
-    pie_terminar: "terminar",
-    pie_matar: "matar",
-    pie_pestana: "pestaña",
-    pie_ir_a: "ir a",
-    pie_pausa: "pausa",
-    pie_ayuda: "ayuda",
-    pie_salir: "salir",
-    tecla_espacio: "espacio",
+    // Shortcut footer
+    footer_accept: "aceptar",
+    footer_clear: "borrar",
+    footer_move: "mover",
+    footer_search: "buscar",
+    footer_sort: "ordenar",
+    footer_terminate: "terminar",
+    footer_kill: "matar",
+    footer_tab: "pestaña",
+    footer_go_to: "ir a",
+    footer_pause: "pausa",
+    footer_help: "ayuda",
+    footer_quit: "salir",
+    key_space: "espacio",
 
-    // Ventana de confirmación
-    confirmar_titulo: "Terminar proceso",
-    confirmar_enviar: "¿Enviar",
-    confirmar_a: "a",
-    confirmar_forzar: "(forzar)",
-    confirmar_opciones: "s / Enter: sí      cualquier otra tecla: no",
+    // Confirmation dialog
+    confirm_title: "Terminar proceso",
+    confirm_send: "¿Enviar",
+    confirm_to: "a",
+    confirm_force: "(forzar)",
+    confirm_options: "s / Enter: sí      cualquier otra tecla: no",
 
-    // Avisos al enviar señales
-    aviso_enviado_a: "enviado a",
-    aviso_no_se_pudo_terminar: "No se pudo terminar",
-    senal_no_existe: "el proceso ya no existe",
-    senal_sin_permiso: "sin permiso (¿es de otro usuario?)",
-    senal_no_soportada: "señal no soportada",
+    // Notices when sending signals
+    notice_sent_to: "enviado a",
+    notice_could_not_terminate: "No se pudo terminar",
+    signal_no_such_process: "el proceso ya no existe",
+    signal_permission_denied: "sin permiso (¿es de otro usuario?)",
+    signal_unsupported: "señal no soportada",
 
-    // Ventana de ayuda
-    ayuda_titulo: "Ayuda — cualquier tecla para cerrar",
-    ayuda_general: "General",
-    ayuda_cambiar_pestana: "Cambiar de pestaña",
-    ayuda_ir_pestana: "Ir a una pestaña",
-    ayuda_pausa: "Pausar / reanudar la actualización",
-    ayuda_salir: "Salir",
-    ayuda_mover: "Moverse (PgUp/PgDn, g/G)",
-    ayuda_buscar: "Buscar por nombre, comando, PID o usuario",
-    ayuda_ordenar: "Ordenar por CPU, memoria, PID, nombre, usuario",
-    ayuda_invertir: "(repetir la tecla invierte el orden)",
-    ayuda_solo_mios: "Solo mis procesos",
-    ayuda_quitar_filtros: "Quitar filtros",
-    ayuda_terminar: "Terminar (SIGTERM), pide confirmación",
-    ayuda_matar: "Matar (SIGKILL), pide confirmación",
+    // Help dialog
+    help_title: "Ayuda — cualquier tecla para cerrar",
+    help_general: "General",
+    help_switch_tab: "Cambiar de pestaña",
+    help_go_to_tab: "Ir a una pestaña",
+    help_pause: "Pausar / reanudar la actualización",
+    help_quit: "Salir",
+    help_move: "Moverse (PgUp/PgDn, g/G)",
+    help_search: "Buscar por nombre, comando, PID o usuario",
+    help_sort: "Ordenar por CPU, memoria, PID, nombre, usuario",
+    help_reverse: "(repetir la tecla invierte el orden)",
+    help_mine_only: "Solo mis procesos",
+    help_clear_filters: "Quitar filtros",
+    help_terminate: "Terminar (SIGTERM), pide confirmación",
+    help_kill: "Matar (SIGKILL), pide confirmación",
 
-    // Línea de comandos
-    cli_ayuda: "\
+    // Command line
+    cli_help: "\
 memtop — información del sistema y monitor de recursos en la terminal
 
 USO:
@@ -522,205 +523,205 @@ CONFIGURACIÓN:
 
 Dentro de memtop pulsa ? para ver todas las teclas.
 ",
-    cli_prueba_ayuda: "Prueba `memtop --help`.",
-    cli_falta_ruta: "--config necesita una ruta",
-    cli_falta_idioma: "--lang necesita un valor: auto, en o es",
-    cli_idioma_invalido: "--lang solo admite auto, en o es",
-    cli_intervalo_invalido: "--interval necesita un número de segundos (mínimo 0.2)",
-    cli_opcion_desconocida: "opción desconocida",
-    cli_sin_terminal: "necesita ejecutarse en una terminal interactiva.",
+    cli_try_help: "Prueba `memtop --help`.",
+    cli_missing_path: "--config necesita una ruta",
+    cli_missing_lang: "--lang necesita un valor: auto, en o es",
+    cli_invalid_lang: "--lang solo admite auto, en o es",
+    cli_invalid_interval: "--interval necesita un número de segundos (mínimo 0.2)",
+    cli_unknown_option: "opción desconocida",
+    cli_no_terminal: "necesita ejecutarse en una terminal interactiva.",
 
-    // Errores del archivo de configuración
-    config_intervalo_minimo: "interval debe ser un número de segundos mayor o igual que",
-    config_color_invalido: "color no válido",
-    config_color_formatos: "usa un nombre como \"cyan\", \"#rrggbb\" o un número de 0 a 255",
-    config_no_se_pudo_leer: "no se pudo leer",
-    config_error_en: "error en",
+    // Configuration file errors
+    config_min_interval: "interval debe ser un número de segundos mayor o igual que",
+    config_invalid_color: "color no válido",
+    config_color_formats: "usa un nombre como \"cyan\", \"#rrggbb\" o un número de 0 a 255",
+    config_could_not_read: "no se pudo leer",
+    config_error_in: "error en",
 
-    // Errores al leer el sistema
-    sistema_sin_info: "no se pudo leer la información del sistema",
-    sistema_sin_discos: "no se pudieron leer los discos",
-    sistema_sin_red: "no se pudo leer la red",
-    sistema_sin_sensores: "no se pudieron leer los sensores",
+    // System read errors
+    system_no_info: "no se pudo leer la información del sistema",
+    system_no_disks: "no se pudieron leer los discos",
+    system_no_network: "no se pudo leer la red",
+    system_no_sensors: "no se pudieron leer los sensores",
 
-    // GPU sin nombre en la base PCI
-    fabricante_desconocido: "Desconocido",
+    // GPU missing from the PCI database
+    unknown_vendor: "Desconocido",
 };
 
-pub const EN: Textos = Textos {
-    pestana_resumen: "Overview",
-    pestana_cpu: "CPU",
-    pestana_ram: "Memory",
-    pestana_almacenamiento: "Storage",
-    pestana_gpu: "GPU",
-    pestana_red: "Network",
-    pestana_procesos: "Processes",
+pub const EN: Texts = Texts {
+    tab_summary: "Overview",
+    tab_cpu: "CPU",
+    tab_ram: "Memory",
+    tab_storage: "Storage",
+    tab_gpu: "GPU",
+    tab_network: "Network",
+    tab_processes: "Processes",
 
-    // Barra superior
-    pausa: "PAUSED",
+    // Top bar
+    paused: "PAUSED",
 
-    // Panel de sistema
-    titulo_sistema: "System",
-    equipo: "Host",
-    so: "OS",
+    // System panel
+    title_system: "System",
+    machine: "Host",
+    os: "OS",
     kernel: "Kernel",
-    encendido: "Uptime",
-    escritorio: "Desktop",
+    uptime: "Uptime",
+    desktop: "Desktop",
     shell: "Shell",
     terminal: "Terminal",
     cpu: "CPU",
     gpu: "GPU",
-    memoria: "Memory",
-    disco_raiz: "Disk (/)",
-    bateria: "Battery",
+    memory: "Memory",
+    root_disk: "Disk (/)",
+    battery: "Battery",
 
-    // Estado de la batería
-    bateria_cargando: "Charging",
-    bateria_descargando: "Discharging",
-    bateria_completa: "Full",
-    bateria_sin_cargar: "Plugged in, not charging",
-    bateria_desconocido: "Unknown",
+    // Battery state
+    battery_charging: "Charging",
+    battery_discharging: "Discharging",
+    battery_full: "Full",
+    battery_not_charging: "Plugged in, not charging",
+    battery_unknown: "Unknown",
 
-    // Pestaña Resumen
-    uso: "Usage",
+    // Summary tab
+    usage: "Usage",
     swap: "Swap",
-    titulo_gpu_red_energia: "GPU · Network · Power",
-    titulo_top_cpu: "Top processes by CPU",
-    red: "Network",
-    red_sin_conexion: "not connected",
-    gpu_activa: "active",
-    gpu_en_reposo: "suspended",
+    title_gpu_network_power: "GPU · Network · Power",
+    title_top_cpu: "Top processes by CPU",
+    network: "Network",
+    network_disconnected: "not connected",
+    gpu_active: "active",
+    gpu_idle: "suspended",
 
-    // Columnas de procesos
+    // Process columns
     col_pid: "PID",
-    col_nombre: "Name",
+    col_name: "Name",
     col_cpu: "CPU%",
     col_mem: "MEM%",
     col_res: "RES",
-    col_usuario: "User",
+    col_user: "User",
 
-    // Pestaña CPU
-    titulo_procesador: "Processor",
-    modelo: "Model",
-    nucleos: "Cores",
-    fisicos: "physical",
-    hilos: "threads",
-    frecuencia: "Frequency",
-    carga_media: "Load average",
-    arquitectura: "Architecture",
-    temperatura: "Temperature",
-    uso_total: "Total usage",
-    ultimos: "last",
-    titulo_por_hilo: "Per thread",
-    titulo_sensores: "Sensors",
+    // CPU tab
+    title_processor: "Processor",
+    model: "Model",
+    cores: "Cores",
+    physical: "physical",
+    threads: "threads",
+    frequency: "Frequency",
+    load_average: "Load average",
+    architecture: "Architecture",
+    temperature: "Temperature",
+    total_usage: "Total usage",
+    last: "last",
+    title_per_thread: "Per thread",
+    title_sensors: "Sensors",
 
-    // Pestaña RAM
-    usada: "Used",
+    // RAM tab
+    used: "Used",
     cache: "Cache",
     total: "Total",
-    disponible: "Available",
-    libre: "Free",
+    available: "Available",
+    free: "Free",
     buffers: "Buffers",
-    compartida: "Shared",
+    shared: "Shared",
     swap_total: "Swap total",
-    swap_usada: "Swap used",
-    titulo_detalle: "Details",
-    titulo_top_memoria: "Top processes by memory",
+    swap_used: "Swap used",
+    title_details: "Details",
+    title_top_memory: "Top processes by memory",
 
-    // Pestaña Almacenamiento
-    titulo_discos: "Physical disks",
-    col_disco: "Disk",
-    col_tipo: "Type",
-    col_tamano: "Size",
+    // Storage tab
+    title_disks: "Physical disks",
+    col_disk: "Disk",
+    col_type: "Type",
+    col_size: "Size",
     col_temp: "Temp",
-    col_lectura: "Read",
-    col_escritura: "Write",
-    titulo_particiones: "Mounted partitions",
-    usados: "used",
-    libres_de: "free of",
+    col_read: "Read",
+    col_write: "Write",
+    title_partitions: "Mounted partitions",
+    used_space: "used",
+    free_of: "free of",
 
-    // Pestaña GPU
-    gpu_ninguna: "No GPU found",
-    fabricante: "Vendor",
+    // GPU tab
+    gpu_none: "No GPU found",
+    vendor: "Vendor",
     driver: "Driver",
     pci: "PCI",
-    estado: "State",
-    gpu_estado_activa: "Active",
-    gpu_estado_reposo: "Suspended (saving power)",
+    state: "State",
+    gpu_state_active: "Active",
+    gpu_state_idle: "Suspended (saving power)",
     vram: "VRAM",
-    consumo: "Power draw",
-    gpu_consultando: "Querying nvidia-smi…",
-    gpu_no_despertar: "Not queried, to avoid waking it up.",
+    power: "Power draw",
+    gpu_querying: "Querying nvidia-smi…",
+    gpu_not_waking: "Not queried, to avoid waking it up.",
 
-    // Pestaña Red
-    descarga: "Download",
-    subida: "Upload",
-    titulo_interfaces: "Interfaces",
-    col_interfaz: "Interface",
-    col_ahora: "now",
+    // Network tab
+    download: "Download",
+    upload: "Upload",
+    title_interfaces: "Interfaces",
+    col_interface: "Interface",
+    col_now: "now",
     col_total: "total",
 
-    // Pestaña Procesos
-    col_tiempo_cpu: "CPU time",
-    col_comando: "Command",
-    solo_mios: "mine only",
+    // Processes tab
+    col_cpu_time: "CPU time",
+    col_command: "Command",
+    mine_only: "mine only",
 
-    // Estados de proceso
-    proc_ejecutando: "Running",
-    proc_durmiendo: "Sleeping",
-    proc_inactivo: "Idle",
-    proc_espera_disco: "Disk I/O",
-    proc_detenido: "Stopped",
-    proc_zombi: "Zombie",
-    proc_otro: "Other",
+    // Process states
+    proc_running: "Running",
+    proc_sleeping: "Sleeping",
+    proc_idle: "Idle",
+    proc_disk_wait: "Disk I/O",
+    proc_stopped: "Stopped",
+    proc_zombie: "Zombie",
+    proc_other: "Other",
 
-    // Pie de atajos
-    pie_aceptar: "accept",
-    pie_borrar: "clear",
-    pie_mover: "move",
-    pie_buscar: "search",
-    pie_ordenar: "sort",
-    pie_terminar: "end",
-    pie_matar: "kill",
-    pie_pestana: "tab",
-    pie_ir_a: "go to",
-    pie_pausa: "pause",
-    pie_ayuda: "help",
-    pie_salir: "quit",
-    tecla_espacio: "space",
+    // Shortcut footer
+    footer_accept: "accept",
+    footer_clear: "clear",
+    footer_move: "move",
+    footer_search: "search",
+    footer_sort: "sort",
+    footer_terminate: "end",
+    footer_kill: "kill",
+    footer_tab: "tab",
+    footer_go_to: "go to",
+    footer_pause: "pause",
+    footer_help: "help",
+    footer_quit: "quit",
+    key_space: "space",
 
-    // Ventana de confirmación
-    confirmar_titulo: "End process",
-    confirmar_enviar: "Send",
-    confirmar_a: "to",
-    confirmar_forzar: "(force)",
-    confirmar_opciones: "y / Enter: yes      any other key: no",
+    // Confirmation dialog
+    confirm_title: "End process",
+    confirm_send: "Send",
+    confirm_to: "to",
+    confirm_force: "(force)",
+    confirm_options: "y / Enter: yes      any other key: no",
 
-    // Avisos al enviar señales
-    aviso_enviado_a: "sent to",
-    aviso_no_se_pudo_terminar: "Could not end",
-    senal_no_existe: "the process no longer exists",
-    senal_sin_permiso: "permission denied (owned by another user?)",
-    senal_no_soportada: "signal not supported",
+    // Notices when sending signals
+    notice_sent_to: "sent to",
+    notice_could_not_terminate: "Could not end",
+    signal_no_such_process: "the process no longer exists",
+    signal_permission_denied: "permission denied (owned by another user?)",
+    signal_unsupported: "signal not supported",
 
-    // Ventana de ayuda
-    ayuda_titulo: "Help — press any key to close",
-    ayuda_general: "General",
-    ayuda_cambiar_pestana: "Switch tab",
-    ayuda_ir_pestana: "Go to a tab",
-    ayuda_pausa: "Pause / resume updates",
-    ayuda_salir: "Quit",
-    ayuda_mover: "Move (PgUp/PgDn, g/G)",
-    ayuda_buscar: "Search by name, command, PID or user",
-    ayuda_ordenar: "Sort by CPU, memory, PID, name, user",
-    ayuda_invertir: "(press again to reverse the order)",
-    ayuda_solo_mios: "Only my processes",
-    ayuda_quitar_filtros: "Clear filters",
-    ayuda_terminar: "End (SIGTERM), asks for confirmation",
-    ayuda_matar: "Kill (SIGKILL), asks for confirmation",
+    // Help dialog
+    help_title: "Help — press any key to close",
+    help_general: "General",
+    help_switch_tab: "Switch tab",
+    help_go_to_tab: "Go to a tab",
+    help_pause: "Pause / resume updates",
+    help_quit: "Quit",
+    help_move: "Move (PgUp/PgDn, g/G)",
+    help_search: "Search by name, command, PID or user",
+    help_sort: "Sort by CPU, memory, PID, name, user",
+    help_reverse: "(press again to reverse the order)",
+    help_mine_only: "Only my processes",
+    help_clear_filters: "Clear filters",
+    help_terminate: "End (SIGTERM), asks for confirmation",
+    help_kill: "Kill (SIGKILL), asks for confirmation",
 
     // Command line
-    cli_ayuda: "\
+    cli_help: "\
 memtop — system information and resource monitor for the terminal
 
 USAGE:
@@ -742,37 +743,37 @@ CONFIGURATION:
 
 Inside memtop, press ? to see every key.
 ",
-    cli_prueba_ayuda: "Try `memtop --help`.",
-    cli_falta_ruta: "--config needs a path",
-    cli_falta_idioma: "--lang needs a value: auto, en or es",
-    cli_idioma_invalido: "--lang only accepts auto, en or es",
-    cli_intervalo_invalido: "--interval needs a number of seconds (minimum 0.2)",
-    cli_opcion_desconocida: "unknown option",
-    cli_sin_terminal: "must be run in an interactive terminal.",
+    cli_try_help: "Try `memtop --help`.",
+    cli_missing_path: "--config needs a path",
+    cli_missing_lang: "--lang needs a value: auto, en or es",
+    cli_invalid_lang: "--lang only accepts auto, en or es",
+    cli_invalid_interval: "--interval needs a number of seconds (minimum 0.2)",
+    cli_unknown_option: "unknown option",
+    cli_no_terminal: "must be run in an interactive terminal.",
 
     // Configuration file errors
-    config_intervalo_minimo: "interval must be a number of seconds greater than or equal to",
-    config_color_invalido: "invalid color",
-    config_color_formatos: "use a name like \"cyan\", \"#rrggbb\" or a number from 0 to 255",
-    config_no_se_pudo_leer: "could not read",
-    config_error_en: "error in",
+    config_min_interval: "interval must be a number of seconds greater than or equal to",
+    config_invalid_color: "invalid color",
+    config_color_formats: "use a name like \"cyan\", \"#rrggbb\" or a number from 0 to 255",
+    config_could_not_read: "could not read",
+    config_error_in: "error in",
 
     // System read errors
-    sistema_sin_info: "could not read system information",
-    sistema_sin_discos: "could not read the disks",
-    sistema_sin_red: "could not read the network",
-    sistema_sin_sensores: "could not read the sensors",
+    system_no_info: "could not read system information",
+    system_no_disks: "could not read the disks",
+    system_no_network: "could not read the network",
+    system_no_sensors: "could not read the sensors",
 
-    // GPU sin nombre en la base PCI
-    fabricante_desconocido: "Unknown",
+    // GPU missing from the PCI database
+    unknown_vendor: "Unknown",
 };
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    fn con(vars: &[(&str, &str)]) -> Idioma {
-        detectar_con(|k| {
+    fn with(vars: &[(&str, &str)]) -> Language {
+        detect_with(|k| {
             vars.iter()
                 .find(|(c, _)| *c == k)
                 .map(|(_, v)| v.to_string())
@@ -780,56 +781,56 @@ mod tests {
     }
 
     #[test]
-    fn detecta_espanol_en_cualquier_pais() {
-        assert_eq!(con(&[("LANG", "es_CO.UTF-8")]), Idioma::Es);
-        assert_eq!(con(&[("LANG", "es_ES@euro")]), Idioma::Es);
-        assert_eq!(con(&[("LANG", "es")]), Idioma::Es);
+    fn detects_spanish_in_any_country() {
+        assert_eq!(with(&[("LANG", "es_CO.UTF-8")]), Language::Es);
+        assert_eq!(with(&[("LANG", "es_ES@euro")]), Language::Es);
+        assert_eq!(with(&[("LANG", "es")]), Language::Es);
     }
 
     #[test]
-    fn cualquier_otro_idioma_usa_ingles() {
-        assert_eq!(con(&[("LANG", "en_US.UTF-8")]), Idioma::En);
-        assert_eq!(con(&[("LANG", "fr_FR.UTF-8")]), Idioma::En);
-        assert_eq!(con(&[("LANG", "C.UTF-8")]), Idioma::En);
-        assert_eq!(con(&[]), Idioma::En);
+    fn any_other_language_uses_english() {
+        assert_eq!(with(&[("LANG", "en_US.UTF-8")]), Language::En);
+        assert_eq!(with(&[("LANG", "fr_FR.UTF-8")]), Language::En);
+        assert_eq!(with(&[("LANG", "C.UTF-8")]), Language::En);
+        assert_eq!(with(&[]), Language::En);
     }
 
     #[test]
-    fn respeta_la_prioridad_de_las_variables() {
+    fn respects_variable_precedence() {
         assert_eq!(
-            con(&[("LANG", "en_US.UTF-8"), ("LC_MESSAGES", "es_MX.UTF-8")]),
-            Idioma::Es
+            with(&[("LANG", "en_US.UTF-8"), ("LC_MESSAGES", "es_MX.UTF-8")]),
+            Language::Es
         );
         assert_eq!(
-            con(&[("LC_MESSAGES", "es_MX.UTF-8"), ("LC_ALL", "en_GB.UTF-8")]),
-            Idioma::En
+            with(&[("LC_MESSAGES", "es_MX.UTF-8"), ("LC_ALL", "en_GB.UTF-8")]),
+            Language::En
         );
         assert_eq!(
-            con(&[("LANG", "en_US.UTF-8"), ("LANGUAGE", "es:en")]),
-            Idioma::Es
+            with(&[("LANG", "en_US.UTF-8"), ("LANGUAGE", "es:en")]),
+            Language::Es
         );
         assert_eq!(
-            con(&[("LANG", ""), ("LC_ALL", ""), ("LC_MESSAGES", "es_AR")]),
-            Idioma::Es
+            with(&[("LANG", ""), ("LC_ALL", ""), ("LC_MESSAGES", "es_AR")]),
+            Language::Es
         );
     }
 
     #[test]
-    fn la_preferencia_explicita_ignora_el_entorno() {
-        assert_eq!(Preferencia::Es.resolver(), Idioma::Es);
-        assert_eq!(Preferencia::En.resolver(), Idioma::En);
+    fn explicit_setting_ignores_the_environment() {
+        assert_eq!(LanguageSetting::Es.resolve(), Language::Es);
+        assert_eq!(LanguageSetting::En.resolve(), Language::En);
     }
 
     #[test]
-    fn lee_la_preferencia_de_texto() {
-        assert_eq!("auto".parse(), Ok(Preferencia::Auto));
-        assert_eq!("ES".parse(), Ok(Preferencia::Es));
-        assert_eq!("en".parse(), Ok(Preferencia::En));
-        assert_eq!("fr".parse::<Preferencia>(), Err(()));
+    fn parses_the_setting_from_text() {
+        assert_eq!("auto".parse(), Ok(LanguageSetting::Auto));
+        assert_eq!("ES".parse(), Ok(LanguageSetting::Es));
+        assert_eq!("en".parse(), Ok(LanguageSetting::En));
+        assert_eq!("fr".parse::<LanguageSetting>(), Err(()));
     }
 
     #[test]
-    fn language_se_ignora_con_el_locale_c() {
-        assert_eq!(con(&[("LANG", "C"), ("LANGUAGE", "es")]), Idioma::En);
+    fn language_is_ignored_with_the_c_locale() {
+        assert_eq!(with(&[("LANG", "C"), ("LANGUAGE", "es")]), Language::En);
     }
 }

@@ -89,7 +89,7 @@ pub fn detect() -> Vec<Gpu> {
                 .and_then(|p| p.file_name().map(|n| n.to_string_lossy().into_owned()));
             let vendor_name = vendor
                 .and_then(pci::vendor_name)
-                .unwrap_or_else(|| i18n::t().fabricante_desconocido.into());
+                .unwrap_or_else(|| i18n::t().unknown_vendor.into());
             let name = vendor
                 .zip(device)
                 .and_then(|(v, d)| pci::device_name(v, d))

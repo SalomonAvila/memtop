@@ -40,7 +40,7 @@ const VERSION: &str = env!("CARGO_PKG_VERSION");
 struct Opciones {
     config: Option<PathBuf>,
     intervalo: Option<f64>,
-    idioma: Option<i18n::Preferencia>,
+    idioma: Option<i18n::LanguageSetting>,
 }
 
 impl Opciones {
@@ -78,13 +78,13 @@ fn leer_opciones(args: impl IntoIterator<Item = String>) -> Result<(Accion, Opci
             "-V" | "--version" => accion = accion.or(Some(Accion::Version)),
             "--print-config" => accion = accion.or(Some(Accion::ConfigEjemplo)),
             "-c" | "--config" => {
-                o.config = Some(PathBuf::from(args.next().ok_or(t.cli_falta_ruta)?))
+                o.config = Some(PathBuf::from(args.next().ok_or(t.cli_missing_path)?))
             }
             "--lang" => {
-                let v = args.next().ok_or(t.cli_falta_idioma)?;
+                let v = args.next().ok_or(t.cli_missing_lang)?;
                 let i = v
                     .parse()
-                    .map_err(|_| format!("{}: {v:?}", t.cli_idioma_invalido))?;
+                    .map_err(|_| format!("{}: {v:?}", t.cli_invalid_lang))?;
                 o.idioma = Some(i);
             }
             "-i" | "--interval" => {
@@ -92,10 +92,10 @@ fn leer_opciones(args: impl IntoIterator<Item = String>) -> Result<(Accion, Opci
                     .next()
                     .and_then(|v| v.replace(',', ".").parse().ok())
                     .filter(|v: &f64| v.is_finite() && *v >= config::INTERVALO_MINIMO)
-                    .ok_or(t.cli_intervalo_invalido)?;
+                    .ok_or(t.cli_invalid_interval)?;
                 o.intervalo = Some(s);
             }
-            otro => return Err(format!("{}: {otro}", t.cli_opcion_desconocida)),
+            otro => return Err(format!("{}: {otro}", t.cli_unknown_option)),
         }
     }
     Ok((accion.unwrap_or(Accion::Ejecutar), o))
@@ -106,18 +106,18 @@ fn main() -> ExitCode {
     let (accion, opciones) = match leer_opciones(env::args().skip(1)) {
         Ok(r) => r,
         Err(e) => {
-            eprintln!("memtop: {e}\n{}", i18n::t().cli_prueba_ayuda);
+            eprintln!("memtop: {e}\n{}", i18n::t().cli_try_help);
             return ExitCode::from(2);
         }
     };
     // Desde aquí, la ayuda y los errores del archivo de configuración respetan `--lang`.
     if let Some(i) = opciones.idioma {
-        i18n::fijar(i.resolver());
+        i18n::set(i.resolve());
     }
     match accion {
         Accion::Ejecutar => {}
         Accion::Ayuda => {
-            print!("{}", i18n::t().cli_ayuda);
+            print!("{}", i18n::t().cli_help);
             return ExitCode::SUCCESS;
         }
         Accion::Version => {
@@ -139,10 +139,10 @@ fn main() -> ExitCode {
     };
 
     // Idioma definitivo: archivo de configuración y, por encima, `--lang`.
-    i18n::fijar(config.idioma.resolver());
+    i18n::set(config.idioma.resolve());
 
     if !stdout().is_terminal() {
-        eprintln!("memtop: {}", i18n::t().cli_sin_terminal);
+        eprintln!("memtop: {}", i18n::t().cli_no_terminal);
         return ExitCode::FAILURE;
     }
 
@@ -217,7 +217,7 @@ mod tests {
         let o = opciones(&["--lang", "en", "-i", "2,5", "-c", "/tmp/c.toml"]);
         assert_eq!(o.config, Some(PathBuf::from("/tmp/c.toml")));
         let c = o.aplicar(Config::default());
-        assert_eq!(c.idioma, i18n::Preferencia::En);
+        assert_eq!(c.idioma, i18n::LanguageSetting::En);
         assert_eq!(c.intervalo(), Duration::from_millis(2500));
     }
 
@@ -228,7 +228,7 @@ mod tests {
                 .unwrap();
         let c = opciones(&["-i", "2", "--lang", "en"]).aplicar(archivo);
         assert_eq!(c.intervalo, 2.0);
-        assert_eq!(c.idioma, i18n::Preferencia::En);
+        assert_eq!(c.idioma, i18n::LanguageSetting::En);
         // Lo que no se indicó en la línea de comandos sale del archivo.
         assert_eq!(c.pestana_inicial, app::Pestana::Red);
     }
@@ -253,7 +253,7 @@ mod tests {
         // --lang se conserva aunque vaya después de --help; la primera acción manda.
         let (accion, o) = leer_opciones(["--help", "--lang", "es"].map(String::from)).unwrap();
         assert_eq!(accion, Accion::Ayuda);
-        assert_eq!(o.idioma, Some(i18n::Preferencia::Es));
+        assert_eq!(o.idioma, Some(i18n::LanguageSetting::Es));
         assert_eq!(leer(&["-V", "--help"]), Ok(Accion::Version));
         // Un error en otra opción se informa aunque haya --help.
         assert!(leer(&["--help", "--lang", "fr"]).is_err());

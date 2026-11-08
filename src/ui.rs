@@ -195,7 +195,7 @@ pub fn dibujar(f: &mut Frame, app: &mut App) {
         izq
     };
     f.render_widget(
-        Paragraph::new(lineas_sis).block(bloque(marco(i18n::t().titulo_sistema))),
+        Paragraph::new(lineas_sis).block(bloque(marco(i18n::t().title_system))),
         sis,
     );
 
@@ -245,7 +245,7 @@ fn dibujar_pestanas(f: &mut Frame, app: &App, area: Rect) {
     )];
     if app.pausado {
         derecha.push(Span::styled(
-            format!(" ⏸ {} ", i18n::t().pausa),
+            format!(" ⏸ {} ", i18n::t().paused),
             Style::new().fg(Color::Black).bg(Color::Yellow),
         ));
         derecha.push(Span::raw(" "));
@@ -318,24 +318,24 @@ fn marco(texto: &str) -> String {
 fn estado_proceso(e: EstadoProceso) -> &'static str {
     let t = i18n::t();
     match e {
-        EstadoProceso::Ejecutando => t.proc_ejecutando,
-        EstadoProceso::Durmiendo => t.proc_durmiendo,
-        EstadoProceso::Inactivo => t.proc_inactivo,
-        EstadoProceso::EsperaDisco => t.proc_espera_disco,
-        EstadoProceso::Detenido => t.proc_detenido,
-        EstadoProceso::Zombi => t.proc_zombi,
-        EstadoProceso::Otro => t.proc_otro,
+        EstadoProceso::Ejecutando => t.proc_running,
+        EstadoProceso::Durmiendo => t.proc_sleeping,
+        EstadoProceso::Inactivo => t.proc_idle,
+        EstadoProceso::EsperaDisco => t.proc_disk_wait,
+        EstadoProceso::Detenido => t.proc_stopped,
+        EstadoProceso::Zombi => t.proc_zombie,
+        EstadoProceso::Otro => t.proc_other,
     }
 }
 
 fn estado_bateria(e: EstadoBateria) -> &'static str {
     let t = i18n::t();
     match e {
-        EstadoBateria::Cargando => t.bateria_cargando,
-        EstadoBateria::Descargando => t.bateria_descargando,
-        EstadoBateria::Completa => t.bateria_completa,
-        EstadoBateria::SinCargar => t.bateria_sin_cargar,
-        EstadoBateria::Desconocido => t.bateria_desconocido,
+        EstadoBateria::Cargando => t.battery_charging,
+        EstadoBateria::Descargando => t.battery_discharging,
+        EstadoBateria::Completa => t.battery_full,
+        EstadoBateria::SinCargar => t.battery_not_charging,
+        EstadoBateria::Desconocido => t.battery_unknown,
     }
 }
 
@@ -357,13 +357,13 @@ fn panel_sistema(app: &App) -> Vec<Line<'static>> {
         ),
     ];
     if let Some(e) = &i.modelo {
-        l.push(clave_valor(t.equipo, e.clone(), w));
+        l.push(clave_valor(t.machine, e.clone(), w));
     }
-    l.push(clave_valor(t.so, i.so.clone(), w));
+    l.push(clave_valor(t.os, i.so.clone(), w));
     l.push(clave_valor(t.kernel, i.kernel.clone(), w));
-    l.push(clave_valor(t.encendido, fmt_duracion(m.uptime), w));
+    l.push(clave_valor(t.uptime, fmt_duracion(m.uptime), w));
     if let Some(e) = &i.escritorio {
-        l.push(clave_valor(t.escritorio, e.clone(), w));
+        l.push(clave_valor(t.desktop, e.clone(), w));
     }
     if let Some(s) = &i.shell {
         l.push(clave_valor(t.shell, s.clone(), w));
@@ -380,7 +380,7 @@ fn panel_sistema(app: &App) -> Vec<Line<'static>> {
         l.push(clave_valor(t.gpu, format!("{} {}", g.vendor, g.name), w));
     }
     l.push(clave_valor(
-        t.memoria,
+        t.memory,
         format!(
             "{} / {}",
             fmt_bytes(m.memoria.usada()),
@@ -390,7 +390,7 @@ fn panel_sistema(app: &App) -> Vec<Line<'static>> {
     ));
     if let Some(raiz) = m.montajes.iter().find(|x| x.punto == "/") {
         l.push(clave_valor(
-            t.disco_raiz,
+            t.root_disk,
             format!(
                 "{} / {} ({})",
                 fmt_bytes(raiz.usado),
@@ -402,7 +402,7 @@ fn panel_sistema(app: &App) -> Vec<Line<'static>> {
     }
     if let Some(b) = &m.bateria {
         l.push(clave_valor(
-            t.bateria,
+            t.battery,
             format!("{}% ({})", b.porcentaje, estado_bateria(b.estado)),
             w,
         ));
@@ -461,7 +461,7 @@ fn tab_resumen(f: &mut Frame, app: &mut App, area: Rect) {
     if freq > 0 {
         extra.push_str(&format!("  {:.2} GHz", freq as f64 / 1000.0));
     }
-    f.render_widget(barra(t.uso, 8, l1.width, m.cpu_total as f64, extra), l1);
+    f.render_widget(barra(t.usage, 8, l1.width, m.cpu_total as f64, extra), l1);
     let v = ultimos(&m.hist_cpu, graf.width as usize);
     f.render_widget(
         Sparkline::default()
@@ -494,7 +494,7 @@ fn tab_resumen(f: &mut Frame, app: &mut App, area: Rect) {
             ),
         ),
     ];
-    f.render_widget(Paragraph::new(lineas).block(bloque(marco(t.memoria))), mem);
+    f.render_widget(Paragraph::new(lineas).block(bloque(marco(t.memory))), mem);
 
     // Almacenamiento
     let ancho_etq = m
@@ -519,7 +519,7 @@ fn tab_resumen(f: &mut Frame, app: &mut App, area: Rect) {
         })
         .collect();
     f.render_widget(
-        Paragraph::new(lineas).block(bloque(marco(t.pestana_almacenamiento))),
+        Paragraph::new(lineas).block(bloque(marco(t.tab_storage))),
         alm,
     );
 
@@ -527,9 +527,9 @@ fn tab_resumen(f: &mut Frame, app: &mut App, area: Rect) {
     let mut lineas = Vec::new();
     for g in &m.gpus {
         let estado = if g.is_suspended() {
-            Span::styled(t.gpu_en_reposo, Style::new().fg(tema().tenue))
+            Span::styled(t.gpu_idle, Style::new().fg(tema().tenue))
         } else {
-            Span::styled(t.gpu_activa, Style::new().fg(Color::Green))
+            Span::styled(t.gpu_active, Style::new().fg(Color::Green))
         };
         lineas.push(Line::from(vec![
             Span::styled(format!("{:<9}", t.gpu), Style::new().fg(tema().etiqueta)),
@@ -538,11 +538,14 @@ fn tab_resumen(f: &mut Frame, app: &mut App, area: Rect) {
         ]));
     }
     if activas.is_empty() {
-        lineas.push(clave_valor(t.red, t.red_sin_conexion, 9));
+        lineas.push(clave_valor(t.network, t.network_disconnected, 9));
     }
     for i in &activas {
         lineas.push(Line::from(vec![
-            Span::styled(format!("{:<9}", t.red), Style::new().fg(tema().etiqueta)),
+            Span::styled(
+                format!("{:<9}", t.network),
+                Style::new().fg(tema().etiqueta),
+            ),
             Span::raw(format!("{:<12}", i.nombre)),
             Span::styled(
                 format!("↓ {:<13}", fmt_tasa(i.rx_bps)),
@@ -564,7 +567,7 @@ fn tab_resumen(f: &mut Frame, app: &mut App, area: Rect) {
             Color::Red
         };
         lineas.push(barra_color(
-            t.bateria,
+            t.battery,
             9,
             otros.width.saturating_sub(2),
             b.porcentaje as f64,
@@ -573,7 +576,7 @@ fn tab_resumen(f: &mut Frame, app: &mut App, area: Rect) {
         ));
     }
     f.render_widget(
-        Paragraph::new(lineas).block(bloque(marco(t.titulo_gpu_red_energia))),
+        Paragraph::new(lineas).block(bloque(marco(t.title_gpu_network_power))),
         otros,
     );
 
@@ -581,7 +584,7 @@ fn tab_resumen(f: &mut Frame, app: &mut App, area: Rect) {
     tabla_mini(
         f,
         top,
-        &marco(t.titulo_top_cpu),
+        &marco(t.title_top_cpu),
         &lista,
         app.monitor.memoria.total,
     );
@@ -613,12 +616,7 @@ fn tabla_mini(f: &mut Frame, area: Rect, titulo: &str, lista: &[&Proceso], ram_t
     )
     .header(cabecera(
         [
-            t.col_pid,
-            t.col_nombre,
-            t.col_cpu,
-            t.col_mem,
-            t.col_res,
-            t.col_usuario,
+            t.col_pid, t.col_name, t.col_cpu, t.col_mem, t.col_res, t.col_user,
         ]
         .map(String::from),
     ))
@@ -645,14 +643,14 @@ fn tab_cpu(f: &mut Frame, app: &mut App, area: Rect) {
         .map(|n| n.to_string())
         .unwrap_or_else(|| "?".into());
     let mut l = vec![
-        clave_valor(t.modelo, i.cpu_modelo.clone(), w),
+        clave_valor(t.model, i.cpu_modelo.clone(), w),
         clave_valor(
-            t.nucleos,
-            format!("{fisicos} {} · {} {}", t.fisicos, i.hilos, t.hilos),
+            t.cores,
+            format!("{fisicos} {} · {} {}", t.physical, i.hilos, t.threads),
             w,
         ),
         clave_valor(
-            t.frecuencia,
+            t.frequency,
             format!(
                 "{:.2} – {:.2} GHz",
                 fmin as f64 / 1000.0,
@@ -661,20 +659,20 @@ fn tab_cpu(f: &mut Frame, app: &mut App, area: Rect) {
             w,
         ),
         clave_valor(
-            t.carga_media,
+            t.load_average,
             format!(
                 "{:.2}  {:.2}  {:.2}   (1, 5, 15 min)",
                 m.carga.0, m.carga.1, m.carga.2
             ),
             w,
         ),
-        clave_valor(t.arquitectura, i.arquitectura.clone(), w),
+        clave_valor(t.architecture, i.arquitectura.clone(), w),
     ];
     if let Some(grados) = m.temperatura_cpu() {
-        l.push(clave_temp(t.temperatura, grados, w));
+        l.push(clave_temp(t.temperature, grados, w));
     }
     f.render_widget(
-        Paragraph::new(l).block(bloque(marco(t.titulo_procesador))),
+        Paragraph::new(l).block(bloque(marco(t.title_processor))),
         info,
     );
 
@@ -683,7 +681,7 @@ fn tab_cpu(f: &mut Frame, app: &mut App, area: Rect) {
         graf,
         format!(
             " {} {:.1}% · {} {HISTORIAL} s ",
-            t.uso_total, m.cpu_total, t.ultimos
+            t.total_usage, m.cpu_total, t.last
         ),
         &m.hist_cpu,
         Some(100),
@@ -694,7 +692,7 @@ fn tab_cpu(f: &mut Frame, app: &mut App, area: Rect) {
         Layout::horizontal([Constraint::Percentage(62), Constraint::Percentage(38)]).areas(abajo);
 
     // Hilos en dos columnas.
-    let block = bloque(marco(t.titulo_por_hilo));
+    let block = bloque(marco(t.title_per_thread));
     let inner = block.inner(nucleos);
     f.render_widget(block, nucleos);
     let n = m.cpu_nucleos.len();
@@ -739,7 +737,7 @@ fn tab_cpu(f: &mut Frame, app: &mut App, area: Rect) {
         })
         .collect();
     f.render_widget(
-        Paragraph::new(lineas).block(bloque(marco(t.titulo_sensores))),
+        Paragraph::new(lineas).block(bloque(marco(t.title_sensors))),
         temps,
     );
 }
@@ -757,7 +755,7 @@ fn tab_ram(f: &mut Frame, app: &mut App, area: Rect) {
     let w = barras.width.saturating_sub(2);
     let lineas = vec![
         barra(
-            t.usada,
+            t.used,
             10,
             w,
             pct(mm.usada(), mm.total),
@@ -784,7 +782,7 @@ fn tab_ram(f: &mut Frame, app: &mut App, area: Rect) {
         ),
     ];
     f.render_widget(
-        Paragraph::new(lineas).block(bloque(marco(t.memoria))),
+        Paragraph::new(lineas).block(bloque(marco(t.memory))),
         barras,
     );
 
@@ -793,27 +791,24 @@ fn tab_ram(f: &mut Frame, app: &mut App, area: Rect) {
     let w = 13;
     let l = vec![
         clave_valor(t.total, fmt_bytes(mm.total), w),
-        clave_valor(t.usada, fmt_bytes(mm.usada()), w),
-        clave_valor(t.disponible, fmt_bytes(mm.disponible), w),
-        clave_valor(t.libre, fmt_bytes(mm.libre), w),
+        clave_valor(t.used, fmt_bytes(mm.usada()), w),
+        clave_valor(t.available, fmt_bytes(mm.disponible), w),
+        clave_valor(t.free, fmt_bytes(mm.libre), w),
         clave_valor(t.cache, fmt_bytes(mm.cache), w),
         clave_valor(t.buffers, fmt_bytes(mm.buffers), w),
-        clave_valor(t.compartida, fmt_bytes(mm.compartida), w),
+        clave_valor(t.shared, fmt_bytes(mm.compartida), w),
         clave_valor(t.swap_total, fmt_bytes(mm.swap_total), w),
-        clave_valor(t.swap_usada, fmt_bytes(mm.swap_usada()), w),
+        clave_valor(t.swap_used, fmt_bytes(mm.swap_usada()), w),
     ];
-    f.render_widget(
-        Paragraph::new(l).block(bloque(marco(t.titulo_detalle))),
-        det,
-    );
+    f.render_widget(Paragraph::new(l).block(bloque(marco(t.title_details))), det);
     grafica(
         f,
         graf,
         format!(
             " {} {:.0}% · {} {HISTORIAL} s ",
-            t.uso,
+            t.usage,
             pct(mm.usada(), mm.total),
-            t.ultimos
+            t.last
         ),
         &app.monitor.hist_ram,
         Some(100),
@@ -821,7 +816,7 @@ fn tab_ram(f: &mut Frame, app: &mut App, area: Rect) {
     );
 
     let lista = app.top(true, top.height.saturating_sub(3) as usize);
-    tabla_mini(f, top, &marco(t.titulo_top_memoria), &lista, mm.total);
+    tabla_mini(f, top, &marco(t.title_top_memory), &lista, mm.total);
 }
 
 fn tab_almacenamiento(f: &mut Frame, app: &mut App, area: Rect) {
@@ -860,22 +855,22 @@ fn tab_almacenamiento(f: &mut Frame, app: &mut App, area: Rect) {
     .header(
         cabecera(
             [
-                tx.col_disco,
-                tx.modelo,
-                tx.col_tipo,
-                tx.col_tamano,
+                tx.col_disk,
+                tx.model,
+                tx.col_type,
+                tx.col_size,
                 tx.col_temp,
-                tx.col_lectura,
-                tx.col_escritura,
+                tx.col_read,
+                tx.col_write,
             ]
             .map(String::from),
         )
         .bottom_margin(1),
     )
-    .block(bloque(marco(tx.titulo_discos)));
+    .block(bloque(marco(tx.title_disks)));
     f.render_widget(t, discos);
 
-    let block = bloque(marco(tx.titulo_particiones));
+    let block = bloque(marco(tx.title_partitions));
     let inner = block.inner(parts);
     f.render_widget(block, parts);
     let mut lineas = Vec::new();
@@ -896,9 +891,9 @@ fn tab_almacenamiento(f: &mut Frame, app: &mut App, area: Rect) {
             format!(
                 "{p:.0}%  {} {} · {} {} {}",
                 fmt_bytes(x.usado),
-                tx.usados,
+                tx.used_space,
                 fmt_bytes(x.total - x.usado),
-                tx.libres_de,
+                tx.free_of,
                 fmt_bytes(x.total)
             ),
         ));
@@ -912,7 +907,7 @@ fn tab_gpu(f: &mut Frame, app: &mut App, area: Rect) {
     let gpus = &app.monitor.gpus;
     if gpus.is_empty() {
         f.render_widget(
-            Paragraph::new(tx.gpu_ninguna).block(bloque(marco(tx.gpu))),
+            Paragraph::new(tx.gpu_none).block(bloque(marco(tx.gpu))),
             area,
         );
         return;
@@ -922,25 +917,25 @@ fn tab_gpu(f: &mut Frame, app: &mut App, area: Rect) {
         let w = 13;
         let ancho = a.width.saturating_sub(2);
         let estado = match g.power_state.as_deref() {
-            Some("suspended") => Span::styled(tx.gpu_estado_reposo, Style::new().fg(tema().tenue)),
-            Some("active") => Span::styled(tx.gpu_estado_activa, Style::new().fg(Color::Green)),
+            Some("suspended") => Span::styled(tx.gpu_state_idle, Style::new().fg(tema().tenue)),
+            Some("active") => Span::styled(tx.gpu_state_active, Style::new().fg(Color::Green)),
             Some(o) => Span::raw(o.to_string()),
             None => Span::raw("—"),
         };
         let mut l = vec![
-            clave_valor(tx.fabricante, g.vendor.clone(), w),
+            clave_valor(tx.vendor, g.vendor.clone(), w),
             clave_valor(tx.driver, g.driver.clone().unwrap_or_else(|| "—".into()), w),
             clave_valor(tx.pci, g.address.clone(), w),
             Line::from(vec![
                 Span::styled(
-                    format!("{:<w$}", tx.estado),
+                    format!("{:<w$}", tx.state),
                     Style::new().fg(tema().etiqueta),
                 ),
                 estado,
             ]),
         ];
         if let Some(u) = g.usage {
-            l.push(barra(tx.uso, w, ancho, u as f64, format!("{u:.0}%")));
+            l.push(barra(tx.usage, w, ancho, u as f64, format!("{u:.0}%")));
         }
         if let (Some(u), Some(t)) = (g.vram_used, g.vram_total) {
             l.push(barra(
@@ -956,23 +951,20 @@ fn tab_gpu(f: &mut Frame, app: &mut App, area: Rect) {
                 .max_clock_mhz
                 .map(|m| format!(" / {m} MHz"))
                 .unwrap_or_default();
-            l.push(clave_valor(tx.frecuencia, format!("{fr} MHz{max}"), w));
+            l.push(clave_valor(tx.frequency, format!("{fr} MHz{max}"), w));
         }
         if let Some(t) = g.temperature {
-            l.push(clave_temp(tx.temperatura, t, w));
+            l.push(clave_temp(tx.temperature, t, w));
         }
         if let Some(p) = g.power_w {
-            l.push(clave_valor(tx.consumo, format!("{p:.1} W"), w));
+            l.push(clave_valor(tx.power, format!("{p:.1} W"), w));
         }
         if g.vendor.contains("NVIDIA") && g.usage.is_none() && !g.is_suspended() {
-            l.push(Line::styled(
-                tx.gpu_consultando,
-                Style::new().fg(tema().tenue),
-            ));
+            l.push(Line::styled(tx.gpu_querying, Style::new().fg(tema().tenue)));
         }
         if g.is_suspended() {
             l.push(Line::styled(
-                tx.gpu_no_despertar,
+                tx.gpu_not_waking,
                 Style::new().fg(tema().tenue).add_modifier(Modifier::ITALIC),
             ));
         }
@@ -991,7 +983,7 @@ fn tab_red(f: &mut Frame, app: &mut App, area: Rect) {
     grafica(
         f,
         rx,
-        format!(" ↓ {} {} ", t.descarga, fmt_tasa(rx_ahora)),
+        format!(" ↓ {} {} ", t.download, fmt_tasa(rx_ahora)),
         &m.hist_rx,
         None,
         Color::Green,
@@ -999,7 +991,7 @@ fn tab_red(f: &mut Frame, app: &mut App, area: Rect) {
     grafica(
         f,
         tx,
-        format!(" ↑ {} {} ", t.subida, fmt_tasa(tx_ahora)),
+        format!(" ↑ {} {} ", t.upload, fmt_tasa(tx_ahora)),
         &m.hist_tx,
         None,
         Color::Magenta,
@@ -1035,17 +1027,17 @@ fn tab_red(f: &mut Frame, app: &mut App, area: Rect) {
     )
     .header(
         cabecera([
-            t.col_interfaz.to_string(),
+            t.col_interface.to_string(),
             "IP".into(),
             "MAC".into(),
-            format!("↓ {}", t.col_ahora),
-            format!("↑ {}", t.col_ahora),
+            format!("↓ {}", t.col_now),
+            format!("↑ {}", t.col_now),
             format!("↓ {}", t.col_total),
             format!("↑ {}", t.col_total),
         ])
         .bottom_margin(1),
     )
-    .block(bloque(marco(t.titulo_interfaces)));
+    .block(bloque(marco(t.title_interfaces)));
     f.render_widget(t, tabla);
 }
 
@@ -1099,13 +1091,13 @@ fn tab_procesos(f: &mut Frame, app: &mut App, area: Rect) {
     };
     let cab = cabecera([
         format!("{}{}", t.col_pid, flecha(OrdenProc::Pid)),
-        format!("{}{}", t.col_usuario, flecha(OrdenProc::Usuario)),
+        format!("{}{}", t.col_user, flecha(OrdenProc::Usuario)),
         format!("{}{}", t.col_cpu, flecha(OrdenProc::Cpu)),
         format!("{}{}", t.col_mem, flecha(OrdenProc::Memoria)),
         t.col_res.into(),
-        t.estado.into(),
-        t.col_tiempo_cpu.into(),
-        format!("{}{}", t.col_comando, flecha(OrdenProc::Nombre)),
+        t.state.into(),
+        t.col_cpu_time.into(),
+        format!("{}{}", t.col_command, flecha(OrdenProc::Nombre)),
     ]);
 
     let lista = app.procesos();
@@ -1134,9 +1126,9 @@ fn tab_procesos(f: &mut Frame, app: &mut App, area: Rect) {
         })
         .collect();
 
-    let mut titulo = format!(" {} ({n}) ", t.pestana_procesos);
+    let mut titulo = format!(" {} ({n}) ", t.tab_processes);
     if app.solo_mios {
-        titulo.push_str(&format!("· {} ", t.solo_mios));
+        titulo.push_str(&format!("· {} ", t.mine_only));
     }
     let mut block = bloque(titulo);
     if app.modo == Modo::Buscando || !app.busqueda.is_empty() {
@@ -1216,27 +1208,27 @@ fn dibujar_pie(f: &mut Frame, app: &App, area: Rect) {
     let t = i18n::t();
     let pares: &[(&str, &str)] = match (&app.modo, app.pestana) {
         (Modo::Buscando, _) => &[
-            ("Enter", t.pie_aceptar),
-            ("Esc", t.pie_borrar),
-            ("↑↓", t.pie_mover),
+            ("Enter", t.footer_accept),
+            ("Esc", t.footer_clear),
+            ("↑↓", t.footer_move),
         ],
         (_, Pestana::Procesos) => &[
-            ("↑↓", t.pie_mover),
-            ("/", t.pie_buscar),
-            ("c m p n u", t.pie_ordenar),
-            ("o", t.solo_mios),
-            ("t", t.pie_terminar),
-            ("K", t.pie_matar),
-            ("←→", t.pie_pestana),
-            ("?", t.pie_ayuda),
-            ("q", t.pie_salir),
+            ("↑↓", t.footer_move),
+            ("/", t.footer_search),
+            ("c m p n u", t.footer_sort),
+            ("o", t.mine_only),
+            ("t", t.footer_terminate),
+            ("K", t.footer_kill),
+            ("←→", t.footer_tab),
+            ("?", t.footer_help),
+            ("q", t.footer_quit),
         ],
         _ => &[
-            ("←→/Tab", t.pie_pestana),
-            ("1-7", t.pie_ir_a),
-            (t.tecla_espacio, t.pie_pausa),
-            ("?", t.pie_ayuda),
-            ("q", t.pie_salir),
+            ("←→/Tab", t.footer_tab),
+            ("1-7", t.footer_go_to),
+            (t.key_space, t.footer_pause),
+            ("?", t.footer_help),
+            ("q", t.footer_quit),
         ],
     };
     let mut spans = vec![Span::raw(" ")];
@@ -1268,16 +1260,16 @@ fn dibujar_confirmar(f: &mut Frame, pid: u32, nombre: &str, forzar: bool) {
     let r = centrar(f.area(), 58, 7);
     f.render_widget(Clear, r);
     let senal = if forzar {
-        format!("SIGKILL {}", t.confirmar_forzar)
+        format!("SIGKILL {}", t.confirm_force)
     } else {
         "SIGTERM".to_string()
     };
     let l = vec![
         Line::raw(""),
         Line::from(vec![
-            Span::raw(format!(" {} ", t.confirmar_enviar)),
+            Span::raw(format!(" {} ", t.confirm_send)),
             Span::styled(senal, negrita(Color::Red)),
-            Span::raw(format!(" {} ", t.confirmar_a)),
+            Span::raw(format!(" {} ", t.confirm_to)),
             Span::styled(
                 format!("{nombre} ({pid})"),
                 Style::new().add_modifier(Modifier::BOLD),
@@ -1286,11 +1278,11 @@ fn dibujar_confirmar(f: &mut Frame, pid: u32, nombre: &str, forzar: bool) {
         ]),
         Line::raw(""),
         Line::styled(
-            format!(" {}", t.confirmar_opciones),
+            format!(" {}", t.confirm_options),
             Style::new().fg(tema().tenue),
         ),
     ];
-    let block = bloque(marco(t.confirmar_titulo)).border_style(Style::new().fg(Color::Red));
+    let block = bloque(marco(t.confirm_title)).border_style(Style::new().fg(Color::Red));
     f.render_widget(Paragraph::new(l).wrap(Wrap { trim: false }).block(block), r);
 }
 
@@ -1298,25 +1290,25 @@ fn dibujar_ayuda(f: &mut Frame) {
     let t = i18n::t();
     let secciones: [(&str, &[(&str, &str)]); 2] = [
         (
-            t.ayuda_general,
+            t.help_general,
             &[
-                ("← → / Tab / h l", t.ayuda_cambiar_pestana),
-                ("1 … 7", t.ayuda_ir_pestana),
-                (t.tecla_espacio, t.ayuda_pausa),
-                ("q / Esc", t.ayuda_salir),
+                ("← → / Tab / h l", t.help_switch_tab),
+                ("1 … 7", t.help_go_to_tab),
+                (t.key_space, t.help_pause),
+                ("q / Esc", t.help_quit),
             ],
         ),
         (
-            t.pestana_procesos,
+            t.tab_processes,
             &[
-                ("↑ ↓ / j k", t.ayuda_mover),
-                ("/", t.ayuda_buscar),
-                ("c m p n u", t.ayuda_ordenar),
-                ("", t.ayuda_invertir),
-                ("o", t.ayuda_solo_mios),
-                ("x", t.ayuda_quitar_filtros),
-                ("t / F9", t.ayuda_terminar),
-                ("K", t.ayuda_matar),
+                ("↑ ↓ / j k", t.help_move),
+                ("/", t.help_search),
+                ("c m p n u", t.help_sort),
+                ("", t.help_reverse),
+                ("o", t.help_mine_only),
+                ("x", t.help_clear_filters),
+                ("t / F9", t.help_terminate),
+                ("K", t.help_kill),
             ],
         ),
     ];
@@ -1333,5 +1325,5 @@ fn dibujar_ayuda(f: &mut Frame) {
     }
     let r = centrar(f.area(), 72, l.len() as u16 + 2);
     f.render_widget(Clear, r);
-    f.render_widget(Paragraph::new(l).block(bloque(marco(t.ayuda_titulo))), r);
+    f.render_widget(Paragraph::new(l).block(bloque(marco(t.help_title))), r);
 }

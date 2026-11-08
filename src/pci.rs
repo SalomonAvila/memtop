@@ -2,7 +2,7 @@
 //!
 //! El binario incluye `data/pci-gpu.ids`, un extracto de la base pública
 //! [pci.ids](https://pci-ids.ucw.cz) con solo los fabricantes de gráficas. Se
-//! regenera con `scripts/actualizar-pci-ids.sh`.
+//! regenera con `scripts/update-pci-ids.sh`.
 
 use std::{collections::HashMap, sync::OnceLock};
 

@@ -18,7 +18,7 @@ use serde::{Deserialize, Deserializer, de};
 
 use crate::{
     app::{OrdenProc, Pestana},
-    i18n::Preferencia,
+    i18n::{self, Preferencia},
 };
 
 /// Plantilla documentada; coincide con los valores por defecto (lo comprueba una prueba).
@@ -110,7 +110,7 @@ impl Config {
 
     fn validar(self) -> Result<Self> {
         if !self.intervalo.is_finite() || self.intervalo < INTERVALO_MINIMO {
-            bail!("interval debe ser un número de segundos mayor o igual que {INTERVALO_MINIMO}");
+            bail!("{} {INTERVALO_MINIMO}", i18n::t().config_intervalo_minimo);
         }
         Ok(self)
     }
@@ -119,8 +119,10 @@ impl Config {
 fn color<'de, D: Deserializer<'de>>(d: D) -> Result<Color, D::Error> {
     let texto = String::deserialize(d)?;
     texto.parse().map_err(|_| {
+        let t = i18n::t();
         de::Error::custom(format!(
-            "color no válido: {texto:?} (usa un nombre como \"cyan\", \"#rrggbb\" o un número de 0 a 255)"
+            "{}: {texto:?} ({})",
+            t.config_color_invalido, t.config_color_formatos
         ))
     })
 }
@@ -156,9 +158,13 @@ pub fn cargar(ruta: Option<&Path>) -> Result<Config> {
     let texto = match fs::read_to_string(&ruta) {
         Ok(t) => t,
         Err(e) if e.kind() == ErrorKind::NotFound && !obligatoria => return Ok(Config::default()),
-        Err(e) => return Err(e).with_context(|| format!("no se pudo leer {}", ruta.display())),
+        Err(e) => {
+            return Err(e).with_context(|| {
+                format!("{} {}", i18n::t().config_no_se_pudo_leer, ruta.display())
+            });
+        }
     };
-    interpretar(&texto).with_context(|| format!("error en {}", ruta.display()))
+    interpretar(&texto).with_context(|| format!("{} {}", i18n::t().config_error_en, ruta.display()))
 }
 
 #[cfg(test)]

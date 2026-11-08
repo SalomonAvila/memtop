@@ -35,29 +35,6 @@ use config::Config;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
-const AYUDA: &str = "\
-memtop — información del sistema y monitor de recursos en la terminal
-
-USO:
-    memtop [OPCIONES]
-
-OPCIONES:
-    -i, --interval SEG      Segundos entre actualizaciones (mínimo 0.2)
-    --lang IDIOMA           Idioma de la interfaz: auto (según LANG), es o en
-    -c, --config RUTA       Usar este archivo de configuración
-    --print-config          Imprimir una configuración de ejemplo comentada
-    -V, --version           Mostrar la versión
-    -h, --help              Mostrar esta ayuda
-
-CONFIGURACIÓN:
-    Se lee $XDG_CONFIG_HOME/memtop/config.toml (normalmente ~/.config/memtop/config.toml)
-    si existe. Las opciones de arriba tienen prioridad sobre el archivo. Para crearlo:
-
-        mkdir -p ~/.config/memtop && memtop --print-config > ~/.config/memtop/config.toml
-
-Dentro de memtop pulsa ? para ver todas las teclas.
-";
-
 /// Opciones de la línea de comandos. `None` = no se indicó y manda la configuración.
 #[derive(Debug, Default, PartialEq)]
 struct Opciones {
@@ -79,34 +56,35 @@ impl Opciones {
     }
 }
 
+/// Qué hacer después de leer las opciones.
 #[derive(Debug, PartialEq)]
 enum Accion {
-    Ejecutar(Opciones),
+    Ejecutar,
     Ayuda,
     Version,
     ConfigEjemplo,
 }
 
-fn leer_opciones(args: impl IntoIterator<Item = String>) -> Result<Accion, String> {
+/// Lee las opciones. `--help`, `--version` y `--print-config` se resuelven al final para
+/// que un `--lang` en cualquier posición cambie el idioma de la ayuda.
+fn leer_opciones(args: impl IntoIterator<Item = String>) -> Result<(Accion, Opciones), String> {
+    let t = i18n::t();
     let mut o = Opciones::default();
+    let mut accion = None;
     let mut args = args.into_iter();
     while let Some(a) = args.next() {
         match a.as_str() {
-            "-h" | "--help" => return Ok(Accion::Ayuda),
-            "-V" | "--version" => return Ok(Accion::Version),
-            "--print-config" => return Ok(Accion::ConfigEjemplo),
+            "-h" | "--help" => accion = accion.or(Some(Accion::Ayuda)),
+            "-V" | "--version" => accion = accion.or(Some(Accion::Version)),
+            "--print-config" => accion = accion.or(Some(Accion::ConfigEjemplo)),
             "-c" | "--config" => {
-                o.config = Some(PathBuf::from(
-                    args.next().ok_or("--config necesita una ruta")?,
-                ))
+                o.config = Some(PathBuf::from(args.next().ok_or(t.cli_falta_ruta)?))
             }
             "--lang" => {
-                let v = args
-                    .next()
-                    .ok_or("--lang necesita un valor: auto, es o en")?;
+                let v = args.next().ok_or(t.cli_falta_idioma)?;
                 let i = v
                     .parse()
-                    .map_err(|_| format!("--lang no admite {v:?}: usa auto, es o en"))?;
+                    .map_err(|_| format!("{}: {v:?}", t.cli_idioma_invalido))?;
                 o.idioma = Some(i);
             }
             "-i" | "--interval" => {
@@ -114,35 +92,43 @@ fn leer_opciones(args: impl IntoIterator<Item = String>) -> Result<Accion, Strin
                     .next()
                     .and_then(|v| v.replace(',', ".").parse().ok())
                     .filter(|v: &f64| v.is_finite() && *v >= config::INTERVALO_MINIMO)
-                    .ok_or("--interval necesita un número de segundos (mínimo 0.2)")?;
+                    .ok_or(t.cli_intervalo_invalido)?;
                 o.intervalo = Some(s);
             }
-            otro => return Err(format!("opción desconocida: {otro}")),
+            otro => return Err(format!("{}: {otro}", t.cli_opcion_desconocida)),
         }
     }
-    Ok(Accion::Ejecutar(o))
+    Ok((accion.unwrap_or(Accion::Ejecutar), o))
 }
 
 fn main() -> ExitCode {
-    let opciones = match leer_opciones(env::args().skip(1)) {
-        Ok(Accion::Ejecutar(o)) => o,
-        Ok(Accion::Ayuda) => {
-            print!("{AYUDA}");
-            return ExitCode::SUCCESS;
-        }
-        Ok(Accion::Version) => {
-            println!("memtop {VERSION}");
-            return ExitCode::SUCCESS;
-        }
-        Ok(Accion::ConfigEjemplo) => {
-            print!("{}", config::EJEMPLO);
-            return ExitCode::SUCCESS;
-        }
+    // Hasta leer las opciones, los mensajes salen en el idioma del entorno.
+    let (accion, opciones) = match leer_opciones(env::args().skip(1)) {
+        Ok(r) => r,
         Err(e) => {
-            eprintln!("memtop: {e}\nPrueba `memtop --help`.");
+            eprintln!("memtop: {e}\n{}", i18n::t().cli_prueba_ayuda);
             return ExitCode::from(2);
         }
     };
+    // Desde aquí, la ayuda y los errores del archivo de configuración respetan `--lang`.
+    if let Some(i) = opciones.idioma {
+        i18n::fijar(i.resolver());
+    }
+    match accion {
+        Accion::Ejecutar => {}
+        Accion::Ayuda => {
+            print!("{}", i18n::t().cli_ayuda);
+            return ExitCode::SUCCESS;
+        }
+        Accion::Version => {
+            println!("memtop {VERSION}");
+            return ExitCode::SUCCESS;
+        }
+        Accion::ConfigEjemplo => {
+            print!("{}", config::EJEMPLO);
+            return ExitCode::SUCCESS;
+        }
+    }
 
     let config = match config::cargar(opciones.config.as_deref()) {
         Ok(c) => opciones.aplicar(c),
@@ -152,8 +138,11 @@ fn main() -> ExitCode {
         }
     };
 
+    // Idioma definitivo: archivo de configuración y, por encima, `--lang`.
+    i18n::fijar(config.idioma.resolver());
+
     if !stdout().is_terminal() {
-        eprintln!("memtop: necesita ejecutarse en una terminal interactiva.");
+        eprintln!("memtop: {}", i18n::t().cli_sin_terminal);
         return ExitCode::FAILURE;
     }
 
@@ -167,7 +156,6 @@ fn main() -> ExitCode {
 }
 
 fn iniciar(config: Config) -> Result<()> {
-    i18n::fijar(config.idioma.resolver());
     ui::fijar_tema(config.colores.clone());
     // Primera lectura antes de entrar a la interfaz: el uso de CPU necesita dos muestras.
     let monitor = sistema::Monitor::new()?;
@@ -208,12 +196,12 @@ mod tests {
     use super::*;
 
     fn leer(args: &[&str]) -> Result<Accion, String> {
-        leer_opciones(args.iter().map(|s| s.to_string()))
+        leer_opciones(args.iter().map(|s| s.to_string())).map(|(a, _)| a)
     }
 
     fn opciones(args: &[&str]) -> Opciones {
-        match leer(args) {
-            Ok(Accion::Ejecutar(o)) => o,
+        match leer_opciones(args.iter().map(|s| s.to_string())) {
+            Ok((Accion::Ejecutar, o)) => o,
             otro => panic!("debería ejecutar: {otro:?}"),
         }
     }
@@ -262,6 +250,13 @@ mod tests {
         assert_eq!(leer(&["--help"]), Ok(Accion::Ayuda));
         assert_eq!(leer(&["-V"]), Ok(Accion::Version));
         assert_eq!(leer(&["--print-config"]), Ok(Accion::ConfigEjemplo));
+        // --lang se conserva aunque vaya después de --help; la primera acción manda.
+        let (accion, o) = leer_opciones(["--help", "--lang", "es"].map(String::from)).unwrap();
+        assert_eq!(accion, Accion::Ayuda);
+        assert_eq!(o.idioma, Some(i18n::Preferencia::Es));
+        assert_eq!(leer(&["-V", "--help"]), Ok(Accion::Version));
+        // Un error en otra opción se informa aunque haya --help.
+        assert!(leer(&["--help", "--lang", "fr"]).is_err());
     }
 
     #[test]

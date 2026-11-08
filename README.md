@@ -308,7 +308,8 @@ memtop/
 ├── data/
 │   └── pci-gpu.ids             Extract of pci.ids with the GPU vendors
 ├── docs/
-│   └── RELEASING.md            Maintainer notes: releases, COPR and branch protection
+│   ├── RELEASING.md            Maintainer notes: releases, COPR and branch protection
+│   └── ROADMAP.md              What is planned until 1.0
 ├── packaging/
 │   └── memtop.spec             RPM package for Fedora
 ├── scripts/
@@ -354,6 +355,8 @@ Contributions are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md) before openin
 request (against `develop`), and report security problems privately as described in
 [SECURITY.md](SECURITY.md). Everyone taking part is expected to follow the
 [Code of Conduct](CODE_OF_CONDUCT.md).
+
+What is planned until 1.0 is in [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ## License
 

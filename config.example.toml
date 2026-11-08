@@ -1,0 +1,50 @@
+# memtop configuration
+#
+# Location: $XDG_CONFIG_HOME/memtop/config.toml (usually ~/.config/memtop/config.toml).
+# Create it with:
+#
+#     mkdir -p ~/.config/memtop && memtop --print-config > ~/.config/memtop/config.toml
+#
+# Every key is optional: anything you delete or comment out falls back to the default
+# shown here. Command-line options (--interval, --lang) take precedence over this file.
+
+# Interface language: "auto" (from LANG and related variables), "en" or "es".
+language = "auto"
+
+# Seconds between data refreshes. Minimum 0.2.
+interval = 1.0
+
+# Tab shown on startup:
+# "summary", "cpu", "ram", "storage", "gpu", "network" or "processes".
+start_tab = "summary"
+
+# Show the memtop logo above the System panel. With false, the System panel takes the
+# whole left column.
+logo = false
+
+[processes]
+# Initial sort column: "cpu", "memory", "pid", "name" or "user".
+# Numbers sort from highest to lowest; text from A to Z.
+sort = "cpu"
+
+# Show only the current user's processes on startup.
+mine_only = false
+
+[colors]
+# Accepted formats:
+#   - names: black, red, green, yellow, blue, magenta, cyan, gray, darkgray, white,
+#     and their light variants (lightred, lightblue, lightcyan…)
+#   - hexadecimal: "#rrggbb"
+#   - 256-color palette index: "0" to "255"
+
+# Titles, active tab and footer keys.
+accent = "cyan"
+
+# Borders and secondary text.
+muted = "darkgray"
+
+# Field names ("CPU", "Memory"…).
+label = "lightblue"
+
+# Background of the selected row in the process table.
+selection = "#233755"

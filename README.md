@@ -48,7 +48,7 @@ del panel Sistema.
 | 6 | Red | Historial de descarga y subida, e interfaces con IP, MAC, velocidad actual y totales |
 | 7 | Procesos | Lista estilo htop con búsqueda, orden por columnas, filtro de procesos propios y envío de señales |
 
-Los datos se actualizan cada segundo (configurable con `--intervalo` o en el
+Los datos se actualizan cada segundo (configurable con `--interval` o en el
 [archivo de configuración](#configuración)).
 
 ## Instalación
@@ -115,15 +115,15 @@ memtop funciona sin él; solo amplía lo que muestra.
 
 ```sh
 memtop                                  # abre en la pestaña Resumen
-memtop --intervalo 2 --idioma en        # actualiza cada 2 s, interfaz en inglés
+memtop --interval 2 --lang en           # actualiza cada 2 s, interfaz en inglés
 ```
 
 | Opción | Descripción |
 |---|---|
-| `-i`, `--intervalo SEG` | Segundos entre actualizaciones. Por defecto `1`, mínimo `0.2` |
-| `--idioma IDIOMA` | Idioma de la interfaz: `auto` (según `LANG`), `es` o `en` |
+| `-i`, `--interval SEG` | Segundos entre actualizaciones. Por defecto `1`, mínimo `0.2` |
+| `--lang IDIOMA` | Idioma de la interfaz: `auto` (según `LANG`), `es` o `en` |
 | `-c`, `--config RUTA` | Usar este archivo de configuración en lugar del de por defecto |
-| `--config-ejemplo` | Imprimir una configuración de ejemplo comentada y salir |
+| `--print-config` | Imprimir una configuración de ejemplo comentada y salir |
 | `-V`, `--version` | Mostrar la versión |
 | `-h`, `--help` | Mostrar la ayuda |
 
@@ -138,41 +138,38 @@ crearlo con todas las opciones comentadas:
 
 ```sh
 mkdir -p ~/.config/memtop
-memtop --config-ejemplo > ~/.config/memtop/config.toml
+memtop --print-config > ~/.config/memtop/config.toml
 ```
 
-La plantilla completa está en [`config.ejemplo.toml`](config.ejemplo.toml). Todas las claves
+La plantilla completa está en [`config.example.toml`](config.example.toml). Todas las claves
 son opcionales:
 
 | Clave | Valores | Por defecto |
 |---|---|---|
-| `idioma` | `"auto"` (según `LANGUAGE`, `LC_ALL`, `LC_MESSAGES` o `LANG`), `"es"`, `"en"` | `"auto"` |
-| `intervalo` | Segundos entre actualizaciones, `0.2` o más | `1.0` |
-| `pestana_inicial` | `"resumen"`, `"cpu"`, `"ram"`, `"almacenamiento"`, `"gpu"`, `"red"`, `"procesos"` | `"resumen"` |
+| `language` | `"auto"` (según `LANGUAGE`, `LC_ALL`, `LC_MESSAGES` o `LANG`), `"es"`, `"en"` | `"auto"` |
+| `interval` | Segundos entre actualizaciones, `0.2` o más | `1.0` |
+| `start_tab` | `"summary"`, `"cpu"`, `"ram"`, `"storage"`, `"gpu"`, `"network"`, `"processes"` | `"summary"` |
 | `logo` | `true` muestra el logo de memtop encima del panel Sistema; `false` deja que Sistema ocupe toda la columna | `false` |
-| `[procesos] orden` | `"cpu"`, `"memoria"`, `"pid"`, `"nombre"`, `"usuario"` | `"cpu"` |
-| `[procesos] solo_mios` | `true` / `false` | `false` |
-| `[colores] acento` | Color de títulos, pestaña activa y teclas | `"cyan"` |
-| `[colores] tenue` | Color de bordes y textos secundarios | `"darkgray"` |
-| `[colores] etiqueta` | Color de los nombres de campo | `"lightblue"` |
-| `[colores] seleccion` | Fondo de la fila seleccionada en Procesos | `"#233755"` |
+| `[processes] sort` | `"cpu"`, `"memory"`, `"pid"`, `"name"`, `"user"` | `"cpu"` |
+| `[processes] mine_only` | `true` / `false` | `false` |
+| `[colors] accent` | Color de títulos, pestaña activa y teclas | `"cyan"` |
+| `[colors] muted` | Color de bordes y textos secundarios | `"darkgray"` |
+| `[colors] label` | Color de los nombres de campo | `"lightblue"` |
+| `[colors] selection` | Fondo de la fila seleccionada en Procesos | `"#233755"` |
 
 Los colores aceptan nombres (`red`, `lightcyan`, `darkgray`…), hexadecimal (`"#rrggbb"`) o
 un índice de la paleta de 256 colores (`"0"` a `"255"`).
 
-La clave `pokemon` y la opción `--sin-pokemon` de versiones anteriores se siguen aceptando
-para no romper configuraciones existentes, pero ya no hacen nada.
-
 Por ejemplo, para abrir siempre en Procesos, ordenado por memoria y con acento verde:
 
 ```toml
-pestana_inicial = "procesos"
+start_tab = "processes"
 
-[procesos]
-orden = "memoria"
+[processes]
+sort = "memory"
 
-[colores]
-acento = "green"
+[colors]
+accent = "green"
 ```
 
 **Prioridad:** valores por defecto < archivo < opciones de la línea de comandos. Por ejemplo,
@@ -180,14 +177,14 @@ acento = "green"
 del archivo.
 
 **Errores:** si el archivo tiene un error de sintaxis, una clave desconocida (por ejemplo una
-errata como `intervalos`) o un valor no válido, memtop no arranca y muestra la línea exacta:
+errata como `intervals`) o un valor no válido, memtop no arranca y muestra la línea exacta:
 
 ```
 memtop: error en ~/.config/memtop/config.toml: TOML parse error at line 1, column 1
   |
-1 | intervalos = 2
-  | ^^^^^^^^^^
-unknown field `intervalos`, expected one of `idioma`, `intervalo`, `pestana_inicial`, `logo`, `procesos`, `colores`, `pokemon`
+1 | intervals = 2
+  | ^^^^^^^^^
+unknown field `intervals`, expected one of `language`, `interval`, `start_tab`, `logo`, `processes`, `colors`
 ```
 
 ## Teclas
@@ -272,7 +269,7 @@ memtop/
 │   ├── gpu.rs                  Detección de GPUs y consulta a nvidia-smi
 │   ├── pci.rs                  Nombres de GPU a partir de la base PCI incluida
 │   └── logo.rs                 Logo de memtop en pixel art
-├── config.ejemplo.toml         Plantilla de configuración (también en memtop --config-ejemplo)
+├── config.example.toml         Plantilla de configuración (también en memtop --print-config)
 ├── Cargo.toml
 ├── Cargo.lock
 ├── LICENSE

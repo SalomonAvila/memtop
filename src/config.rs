@@ -3,7 +3,7 @@
 //! Orden de prioridad: valores por defecto < archivo de configuración < opciones de la
 //! línea de comandos. Todas las claves son opcionales; las desconocidas se rechazan para
 //! que una errata no se ignore en silencio. La plantilla documentada está en
-//! `config.ejemplo.toml` (también disponible con `memtop --config-ejemplo`).
+//! `config.example.toml` (también disponible con `memtop --print-config`).
 
 use std::{
     env, fs,
@@ -22,7 +22,7 @@ use crate::{
 };
 
 /// Plantilla documentada; coincide con los valores por defecto (lo comprueba una prueba).
-pub const EJEMPLO: &str = include_str!("../config.ejemplo.toml");
+pub const EJEMPLO: &str = include_str!("../config.example.toml");
 
 /// Intervalo mínimo entre actualizaciones, en segundos.
 pub const INTERVALO_MINIMO: f64 = 0.2;
@@ -31,25 +31,28 @@ pub const INTERVALO_MINIMO: f64 = 0.2;
 #[serde(default, deny_unknown_fields)]
 pub struct Config {
     /// Idioma de la interfaz.
+    #[serde(rename = "language")]
     pub idioma: Preferencia,
     /// Segundos entre actualizaciones.
+    #[serde(rename = "interval")]
     pub intervalo: f64,
+    #[serde(rename = "start_tab")]
     pub pestana_inicial: Pestana,
     /// Mostrar el logo de memtop encima del panel Sistema. Sin él, Sistema ocupa toda la
     /// columna izquierda.
     pub logo: bool,
+    #[serde(rename = "processes")]
     pub procesos: Procesos,
+    #[serde(rename = "colors")]
     pub colores: Tema,
-    /// Clave obsoleta desde que se quitó el panel del Pokémon. Se acepta y se ignora para
-    /// que los archivos antiguos sigan funcionando.
-    #[serde(rename = "pokemon")]
-    _pokemon: Option<bool>,
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct Procesos {
+    #[serde(rename = "sort")]
     pub orden: OrdenProc,
+    #[serde(rename = "mine_only")]
     pub solo_mios: bool,
 }
 
@@ -57,13 +60,13 @@ pub struct Procesos {
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct Tema {
-    #[serde(deserialize_with = "color")]
+    #[serde(rename = "accent", deserialize_with = "color")]
     pub acento: Color,
-    #[serde(deserialize_with = "color")]
+    #[serde(rename = "muted", deserialize_with = "color")]
     pub tenue: Color,
-    #[serde(deserialize_with = "color")]
+    #[serde(rename = "label", deserialize_with = "color")]
     pub etiqueta: Color,
-    #[serde(deserialize_with = "color")]
+    #[serde(rename = "selection", deserialize_with = "color")]
     pub seleccion: Color,
 }
 
@@ -76,7 +79,6 @@ impl Default for Config {
             logo: false,
             procesos: Procesos::default(),
             colores: Tema::default(),
-            _pokemon: None,
         }
     }
 }
@@ -108,7 +110,7 @@ impl Config {
 
     fn validar(self) -> Result<Self> {
         if !self.intervalo.is_finite() || self.intervalo < INTERVALO_MINIMO {
-            bail!("intervalo debe ser un número de segundos mayor o igual que {INTERVALO_MINIMO}");
+            bail!("interval debe ser un número de segundos mayor o igual que {INTERVALO_MINIMO}");
         }
         Ok(self)
     }
@@ -177,18 +179,18 @@ mod tests {
     fn lee_todas_las_claves() {
         let c = interpretar(
             r##"
-            idioma = "en"
-            intervalo = 2.5
-            pestana_inicial = "procesos"
+            language = "en"
+            interval = 2.5
+            start_tab = "processes"
             logo = true
-            [procesos]
-            orden = "memoria"
-            solo_mios = true
-            [colores]
-            acento = "light-magenta"
-            tenue = "244"
-            etiqueta = "#ff8800"
-            seleccion = "blue"
+            [processes]
+            sort = "memory"
+            mine_only = true
+            [colors]
+            accent = "light-magenta"
+            muted = "244"
+            label = "#ff8800"
+            selection = "blue"
             "##,
         )
         .unwrap();
@@ -206,35 +208,41 @@ mod tests {
 
     #[test]
     fn las_secciones_parciales_conservan_el_resto() {
-        let c = interpretar("[colores]\nacento = \"green\"").unwrap();
+        let c = interpretar("[colors]\naccent = \"green\"").unwrap();
         assert_eq!(c.colores.acento, Color::Green);
         assert_eq!(c.colores.tenue, Tema::default().tenue);
         assert_eq!(c.intervalo, 1.0);
     }
 
     #[test]
-    fn la_clave_obsoleta_pokemon_se_acepta_y_se_ignora() {
-        let c = interpretar("pokemon = false\nintervalo = 2.0").unwrap();
-        assert_eq!(c.intervalo, 2.0);
-        assert!(interpretar("pokemon = true").is_ok());
+    fn rechaza_las_claves_antiguas_en_espanol() {
+        for antigua in [
+            "idioma = \"es\"",
+            "intervalo = 2.0",
+            "pestana_inicial = \"cpu\"",
+            "pokemon = true",
+            "[procesos]\norden = \"cpu\"",
+            "[colores]\nacento = \"green\"",
+        ] {
+            assert!(interpretar(antigua).is_err(), "{antigua}");
+        }
     }
 
     #[test]
     fn rechaza_claves_desconocidas() {
-        let e = interpretar("intervalos = 2").unwrap_err().to_string();
-        assert!(e.contains("intervalos"), "{e}");
-        assert!(interpretar("intervalo_ = 1.0").is_err());
-        assert!(interpretar("[procesos]\nsolo_mio = true").is_err());
+        let e = interpretar("intervals = 2").unwrap_err().to_string();
+        assert!(e.contains("intervals"), "{e}");
+        assert!(interpretar("[processes]\nmine = true").is_err());
     }
 
     #[test]
     fn rechaza_valores_invalidos() {
-        assert!(interpretar("intervalo = 0.1").is_err());
-        assert!(interpretar("idioma = \"fr\"").is_err());
-        assert!(interpretar("intervalo = \"1\"").is_err());
-        assert!(interpretar("pestana_inicial = \"inicio\"").is_err());
-        assert!(interpretar("[procesos]\norden = \"tamaño\"").is_err());
-        let e = interpretar("[colores]\nacento = \"azulito\"")
+        assert!(interpretar("interval = 0.1").is_err());
+        assert!(interpretar("language = \"fr\"").is_err());
+        assert!(interpretar("interval = \"1\"").is_err());
+        assert!(interpretar("start_tab = \"resumen\"").is_err());
+        assert!(interpretar("[processes]\nsort = \"memoria\"").is_err());
+        let e = interpretar("[colors]\naccent = \"azulito\"")
             .unwrap_err()
             .to_string();
         assert!(e.contains("azulito"), "{e}");
@@ -242,7 +250,7 @@ mod tests {
 
     #[test]
     fn los_errores_indican_la_linea() {
-        let e = interpretar("intervalo = 1.0\nidioma = \"es\"\npestana_inicial = si\n")
+        let e = interpretar("interval = 1.0\nlanguage = \"es\"\nstart_tab = si\n")
             .unwrap_err()
             .to_string();
         assert!(e.contains('3'), "{e}");

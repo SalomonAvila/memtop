@@ -156,7 +156,7 @@ fn main() -> ExitCode {
 }
 
 fn iniciar(config: Config) -> Result<()> {
-    ui::fijar_tema(config.colors.clone());
+    ui::set_theme(config.colors.clone());
     // Primera lectura antes de entrar a la interfaz: el uso de CPU necesita dos muestras.
     let monitor = system::Monitor::new()?;
 
@@ -174,7 +174,7 @@ fn ejecutar(terminal: &mut DefaultTerminal, mut app: App, intervalo: Duration) -
     let mut siguiente_tick = Instant::now() + intervalo;
 
     while !app.quit {
-        terminal.draw(|f| ui::dibujar(f, &mut app))?;
+        terminal.draw(|f| ui::draw(f, &mut app))?;
 
         let espera = siguiente_tick.saturating_duration_since(Instant::now());
         if event::poll(espera)? {

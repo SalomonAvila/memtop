@@ -42,10 +42,10 @@ USO:
     memtop [OPCIONES]
 
 OPCIONES:
-    -i, --intervalo SEG     Segundos entre actualizaciones (mínimo 0.2)
-    --idioma IDIOMA         Idioma de la interfaz: auto (según LANG), es o en
+    -i, --interval SEG      Segundos entre actualizaciones (mínimo 0.2)
+    --lang IDIOMA           Idioma de la interfaz: auto (según LANG), es o en
     -c, --config RUTA       Usar este archivo de configuración
-    --config-ejemplo        Imprimir una configuración de ejemplo comentada
+    --print-config          Imprimir una configuración de ejemplo comentada
     -V, --version           Mostrar la versión
     -h, --help              Mostrar esta ayuda
 
@@ -53,7 +53,7 @@ CONFIGURACIÓN:
     Se lee $XDG_CONFIG_HOME/memtop/config.toml (normalmente ~/.config/memtop/config.toml)
     si existe. Las opciones de arriba tienen prioridad sobre el archivo. Para crearlo:
 
-        mkdir -p ~/.config/memtop && memtop --config-ejemplo > ~/.config/memtop/config.toml
+        mkdir -p ~/.config/memtop && memtop --print-config > ~/.config/memtop/config.toml
 
 Dentro de memtop pulsa ? para ver todas las teclas.
 ";
@@ -94,30 +94,27 @@ fn leer_opciones(args: impl IntoIterator<Item = String>) -> Result<Accion, Strin
         match a.as_str() {
             "-h" | "--help" => return Ok(Accion::Ayuda),
             "-V" | "--version" => return Ok(Accion::Version),
-            "--config-ejemplo" => return Ok(Accion::ConfigEjemplo),
+            "--print-config" => return Ok(Accion::ConfigEjemplo),
             "-c" | "--config" => {
                 o.config = Some(PathBuf::from(
                     args.next().ok_or("--config necesita una ruta")?,
                 ))
             }
-            "--idioma" => {
+            "--lang" => {
                 let v = args
                     .next()
-                    .ok_or("--idioma necesita un valor: auto, es o en")?;
+                    .ok_or("--lang necesita un valor: auto, es o en")?;
                 let i = v
                     .parse()
-                    .map_err(|_| format!("--idioma no admite {v:?}: usa auto, es o en"))?;
+                    .map_err(|_| format!("--lang no admite {v:?}: usa auto, es o en"))?;
                 o.idioma = Some(i);
             }
-            // Obsoleta desde que se quitó el panel del Pokémon: se acepta y no hace nada
-            // para no romper alias ni scripts que aún la usen.
-            "--sin-pokemon" => {}
-            "-i" | "--intervalo" => {
+            "-i" | "--interval" => {
                 let s: f64 = args
                     .next()
                     .and_then(|v| v.replace(',', ".").parse().ok())
                     .filter(|v: &f64| v.is_finite() && *v >= config::INTERVALO_MINIMO)
-                    .ok_or("--intervalo necesita un número de segundos (mínimo 0.2)")?;
+                    .ok_or("--interval necesita un número de segundos (mínimo 0.2)")?;
                 o.intervalo = Some(s);
             }
             otro => return Err(format!("opción desconocida: {otro}")),
@@ -229,7 +226,7 @@ mod tests {
 
     #[test]
     fn interpreta_todas_las_opciones() {
-        let o = opciones(&["--idioma", "en", "-i", "2,5", "-c", "/tmp/c.toml"]);
+        let o = opciones(&["--lang", "en", "-i", "2,5", "-c", "/tmp/c.toml"]);
         assert_eq!(o.config, Some(PathBuf::from("/tmp/c.toml")));
         let c = o.aplicar(Config::default());
         assert_eq!(c.idioma, i18n::Preferencia::En);
@@ -239,9 +236,9 @@ mod tests {
     #[test]
     fn las_opciones_tienen_prioridad_sobre_el_archivo() {
         let archivo =
-            config::interpretar("idioma = \"es\"\nintervalo = 5.0\npestana_inicial = \"red\"")
+            config::interpretar("language = \"es\"\ninterval = 5.0\nstart_tab = \"network\"")
                 .unwrap();
-        let c = opciones(&["-i", "2", "--idioma", "en"]).aplicar(archivo);
+        let c = opciones(&["-i", "2", "--lang", "en"]).aplicar(archivo);
         assert_eq!(c.intervalo, 2.0);
         assert_eq!(c.idioma, i18n::Preferencia::En);
         // Lo que no se indicó en la línea de comandos sale del archivo.
@@ -249,22 +246,29 @@ mod tests {
     }
 
     #[test]
-    fn la_opcion_obsoleta_sin_pokemon_se_acepta_y_no_hace_nada() {
-        assert_eq!(opciones(&["--sin-pokemon"]), Opciones::default());
+    fn rechaza_las_opciones_antiguas_en_espanol() {
+        for antigua in [
+            "--intervalo",
+            "--idioma",
+            "--config-ejemplo",
+            "--sin-pokemon",
+        ] {
+            assert!(leer(&[antigua, "1"]).is_err(), "{antigua}");
+        }
     }
 
     #[test]
     fn acciones_que_no_abren_la_interfaz() {
         assert_eq!(leer(&["--help"]), Ok(Accion::Ayuda));
         assert_eq!(leer(&["-V"]), Ok(Accion::Version));
-        assert_eq!(leer(&["--config-ejemplo"]), Ok(Accion::ConfigEjemplo));
+        assert_eq!(leer(&["--print-config"]), Ok(Accion::ConfigEjemplo));
     }
 
     #[test]
     fn rechaza_valores_invalidos() {
         assert!(leer(&["--config"]).is_err());
-        assert!(leer(&["--idioma"]).is_err());
-        assert!(leer(&["--idioma", "fr"]).is_err());
+        assert!(leer(&["--lang"]).is_err());
+        assert!(leer(&["--lang", "fr"]).is_err());
         assert!(leer(&["-i", "0.1"]).is_err());
         assert!(leer(&["-i", "nan"]).is_err());
         assert!(leer(&["--desconocida"]).is_err());

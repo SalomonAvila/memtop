@@ -1,7 +1,7 @@
 //! Idioma de la interfaz y textos traducidos.
 //!
 //! El idioma se elige una vez al arrancar con [`fijar`], a partir de la opción
-//! `--idioma`, la clave `idioma` de la configuración o, si ambas son `auto`, del entorno
+//! `--lang`, la clave `language` de la configuración o, si ambas son `auto`, del entorno
 //! ([`detectar`]). Los textos se obtienen con [`t`], que devuelve la tabla del idioma activo.
 //!
 //! Para añadir un texto: crea el campo en [`Textos`] y dale valor en [`ES`] y [`EN`].
@@ -18,7 +18,7 @@ pub enum Idioma {
     En,
 }
 
-/// Idioma pedido por el usuario en la configuración o en `--idioma`.
+/// Idioma pedido por el usuario en la configuración (`language`) o en `--lang`.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Preferencia {

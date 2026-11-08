@@ -14,16 +14,20 @@ use crate::{
 };
 
 /// Pestañas del panel derecho, en el orden en que se muestran (teclas `1`–`7`).
-/// En la configuración se escriben en minúsculas (`"cpu"`, `"procesos"`…).
+/// En la configuración se escriben en inglés y minúsculas (`"summary"`, `"processes"`…).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Pestana {
+    #[serde(rename = "summary")]
     Resumen,
     Cpu,
     Ram,
+    #[serde(rename = "storage")]
     Almacenamiento,
     Gpu,
+    #[serde(rename = "network")]
     Red,
+    #[serde(rename = "processes")]
     Procesos,
 }
 
@@ -56,14 +60,17 @@ impl Pestana {
 }
 
 /// Columna por la que se ordena la pestaña Procesos.
-/// En la configuración se escriben en minúsculas (`"cpu"`, `"memoria"`…).
+/// En la configuración se escriben en inglés y minúsculas (`"cpu"`, `"memory"`…).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum OrdenProc {
     Cpu,
+    #[serde(rename = "memory")]
     Memoria,
     Pid,
+    #[serde(rename = "name")]
     Nombre,
+    #[serde(rename = "user")]
     Usuario,
 }
 

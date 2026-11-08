@@ -60,7 +60,7 @@ disponible.
 
 %files
 %license LICENSE THIRD_PARTY_NOTICES.md LICENSE.dependencies cargo-vendor.txt
-%doc README.md config.ejemplo.toml
+%doc README.md config.example.toml
 %{_bindir}/memtop
 
 %changelog

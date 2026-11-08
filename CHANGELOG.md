@@ -7,6 +7,8 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-08
+
 ### Changed
 
 - **Breaking:** command-line flags are now in English:
@@ -42,6 +44,7 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Added
 
 - `logo` configuration key to show the memtop logo above the System panel.
+- Fedora 45 packages in COPR, and CI builds and installs the RPM on Fedora 45.
 
 ### Removed
 
@@ -65,6 +68,7 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Configuration file in `$XDG_CONFIG_HOME/memtop/config.toml`.
 - Static binaries for `x86_64` and `aarch64`, and an RPM package for Fedora via COPR.
 
-[Unreleased]: https://github.com/SalomonAvila/memtop/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/SalomonAvila/memtop/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/SalomonAvila/memtop/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/SalomonAvila/memtop/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/SalomonAvila/memtop/releases/tag/v0.1.0

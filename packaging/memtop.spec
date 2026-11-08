@@ -1,8 +1,8 @@
-# Paquete RPM de memtop para Fedora (COPR).
+# memtop RPM package for Fedora (COPR).
 #
-# Los crates de Rust van incluidos en Source1 (vendor) porque no todas las versiones que
-# usa memtop están todavía en Fedora. .copr/Makefile genera Source0 y Source1 a partir
-# del repositorio; para compilarlo a mano:
+# The Rust crates are bundled in Source1 (vendor) because not every version memtop uses
+# is in Fedora yet. .copr/Makefile builds Source0 and Source1 from the repository; to
+# build it by hand:
 #
 #     make -f .copr/Makefile srpm outdir=$PWD/rpm spec=$PWD/packaging/memtop.spec
 #     rpmbuild --rebuild rpm/memtop-*.src.rpm
@@ -13,9 +13,9 @@ Release:        1%{?dist}
 Summary:        System information and resource monitor in a single terminal screen
 Summary(es):    Información del sistema y monitor de recursos en una sola pantalla de terminal
 
-# memtop: MIT. data/pci-gpu.ids (incluido en el binario): BSD-3-Clause.
+# memtop: MIT. data/pci-gpu.ids (embedded in the binary): BSD-3-Clause.
 SourceLicense:  MIT AND BSD-3-Clause
-# memtop, pci.ids y los crates enlazados en el binario (ver LICENSE.dependencies).
+# memtop, pci.ids and the crates linked into the binary (see LICENSE.dependencies).
 License:        MIT AND BSD-3-Clause AND Zlib AND (Apache-2.0 OR MIT) AND (Apache-2.0 OR BSL-1.0) AND (Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT) AND (MIT OR Unlicense) AND (Zlib OR Apache-2.0 OR MIT)
 URL:            https://github.com/SalomonAvila/memtop
 Source0:        %{url}/archive/v%{version}/%{name}-%{version}.tar.gz
@@ -24,7 +24,7 @@ Source1:        %{name}-%{version}-vendor.tar.xz
 ExclusiveArch:  %{rust_arches}
 
 BuildRequires:  cargo-rpm-macros >= 26
-# rust-version de Cargo.toml.
+# rust-version from Cargo.toml.
 BuildRequires:  rust >= 1.95
 
 %global _description %{expand:
@@ -60,7 +60,7 @@ disponible.
 
 %files
 %license LICENSE THIRD_PARTY_NOTICES.md LICENSE.dependencies cargo-vendor.txt
-%doc README.md config.example.toml
+%doc README.md CHANGELOG.md config.example.toml
 %{_bindir}/memtop
 
 %changelog

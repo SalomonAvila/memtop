@@ -1,7 +1,7 @@
-# Publica una versión al subir una etiqueta vX.Y.Z:
+# Publishes a version when a vX.Y.Z tag is pushed:
 #   git tag v0.1.1 && git push origin v0.1.1
-# Crea la release en GitHub y adjunta binarios estáticos (musl) para x86_64 y aarch64,
-# que funcionan en cualquier distribución Linux sin instalar nada más.
+# Creates the GitHub release and attaches static (musl) binaries for x86_64 and aarch64,
+# which work on any Linux distribution without installing anything else.
 name: Release
 
 on:
@@ -15,26 +15,26 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  crear:
-    name: Crear release
+  create:
+    name: Create release
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Comprobar que la etiqueta coincide con Cargo.toml
+      - name: Check that the tag matches Cargo.toml
         run: |
           version="$(grep -m1 '^version' Cargo.toml | cut -d '"' -f2)"
           test "v$version" = "$GITHUB_REF_NAME" || {
-            echo "La etiqueta $GITHUB_REF_NAME no coincide con la versión $version de Cargo.toml"
+            echo "Tag $GITHUB_REF_NAME does not match version $version in Cargo.toml"
             exit 1
           }
-      - name: Crear release
+      - name: Create release
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh release create "$GITHUB_REF_NAME" --title "memtop $GITHUB_REF_NAME" --generate-notes
 
-  binarios:
-    name: Binario ${{ matrix.target }}
-    needs: crear
+  binaries:
+    name: Binary ${{ matrix.target }}
+    needs: create
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -49,14 +49,14 @@ jobs:
         with:
           targets: ${{ matrix.target }}
       - run: cargo build --release --locked --target ${{ matrix.target }}
-      - name: Empaquetar
+      - name: Package
         run: |
-          nombre="memtop-${{ matrix.target }}"
-          mkdir "$nombre"
-          cp "target/${{ matrix.target }}/release/memtop" LICENSE THIRD_PARTY_NOTICES.md README.md "$nombre/"
-          tar czf "$nombre.tar.gz" "$nombre"
-          sha256sum "$nombre.tar.gz" > "$nombre.tar.gz.sha256"
-      - name: Subir a la release
+          name="memtop-${{ matrix.target }}"
+          mkdir "$name"
+          cp "target/${{ matrix.target }}/release/memtop" LICENSE THIRD_PARTY_NOTICES.md README.md CHANGELOG.md "$name/"
+          tar czf "$name.tar.gz" "$name"
+          sha256sum "$name.tar.gz" > "$name.tar.gz.sha256"
+      - name: Upload to the release
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh release upload "$GITHUB_REF_NAME" memtop-${{ matrix.target }}.tar.gz memtop-${{ matrix.target }}.tar.gz.sha256

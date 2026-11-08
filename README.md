@@ -17,6 +17,7 @@ The interface and messages are available in English and Spanish (see [`--lang`](
 - [Configuration](#configuration)
 - [Keys](#keys)
 - [Data and permissions](#data-and-permissions)
+- [Troubleshooting](#troubleshooting)
 - [Development](#development)
 - [Contributing](#contributing)
 - [License](#license)
@@ -252,6 +253,37 @@ the GPU is suspended; on every other tab it only reads the power state from `/sy
 **Containers.** Inside a container, the data in `/proc` and `/sys` may belong to the host
 (kernel, disks, sensors) or be restricted (network, processes).
 
+## Troubleshooting
+
+**memtop disappeared from `dnf` after upgrading Fedora.** Each Fedora release is built
+separately in COPR, and a new release may take a few days to be added. Run
+`sudo dnf upgrade --refresh`; if the package is still missing, please
+[open an issue](https://github.com/SalomonAvila/memtop/issues/new/choose). The
+[prebuilt binary](#prebuilt-binary-recommended) works meanwhile.
+
+**memtop does not start after upgrading from 0.1.x.** The command-line flags and
+configuration keys were renamed to English in 0.2.0, and memtop shows the line it does not
+understand. Regenerate the file with `memtop --print-config > ~/.config/memtop/config.toml`
+or rename the keys as listed in the [changelog](CHANGELOG.md).
+
+**"must be run in an interactive terminal".** memtop draws a full-screen interface, so its
+output cannot be piped or redirected. Run it directly in a terminal.
+
+**No temperatures in the CPU tab.** Temperatures come from the kernel's hardware sensors
+(`/sys/class/hwmon`). If that directory is empty, the sensor driver for your hardware is not
+loaded (common in virtual machines and on some desktops); `sensors-detect` from the
+`lm_sensors` package can find and load it.
+
+**The NVIDIA GPU shows no usage or VRAM.** These come from `nvidia-smi`, which is only
+available with the proprietary NVIDIA driver (not with `nouveau`). memtop only queries it
+while the GPU tab is open, so the first values take a couple of seconds ("Querying
+nvidia-smi…"). If the GPU is "Suspended (saving power)", memtop does not query it on purpose,
+to avoid waking it up and draining the battery.
+
+**Colors look wrong or the logo is garbled.** memtop uses 24-bit colors for some elements.
+Use a terminal with true color support (most modern ones), or pick colors from the 256-color
+palette in the `[colors]` section of the configuration.
+
 ## Development
 
 ```sh
@@ -275,6 +307,8 @@ memtop/
 │       └── release.yml         Publishes binaries when a vX.Y.Z tag is pushed
 ├── data/
 │   └── pci-gpu.ids             Extract of pci.ids with the GPU vendors
+├── docs/
+│   └── RELEASING.md            Maintainer notes: releases, COPR and branch protection
 ├── packaging/
 │   └── memtop.spec             RPM package for Fedora
 ├── scripts/
@@ -311,15 +345,8 @@ scripts/update-pci-ids.sh /usr/share/hwdata/pci.ids  # or uses a local copy
 
 ### Releasing a version
 
-1. Update `version` in `Cargo.toml` and `packaging/memtop.spec`, and move the
-   `Unreleased` entries in `CHANGELOG.md` under the new version.
-2. Create and push the tag:
-   ```sh
-   git tag v0.2.0
-   git push origin v0.2.0
-   ```
-3. The `release.yml` workflow checks that the tag matches `Cargo.toml`, creates the release
-   and attaches the static binaries with their SHA-256 sums.
+The release process, the COPR setup and the branch protection rules are described in
+[docs/RELEASING.md](docs/RELEASING.md).
 
 ## Contributing
 

@@ -1,0 +1,51 @@
+name: Bug report
+description: Something does not work or shows wrong data
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What you saw and what you expected instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Run `memtop --lang en`
+        2. Go to the GPU tab
+        3. …
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: memtop version
+      description: Output of `memtop -V`.
+      placeholder: memtop 0.2.0
+    validations:
+      required: true
+  - type: dropdown
+    id: install
+    attributes:
+      label: How did you install it?
+      options:
+        - COPR (dnf)
+        - Prebuilt binary from GitHub
+        - cargo install / from source
+    validations:
+      required: true
+  - type: input
+    id: system
+    attributes:
+      label: Distribution and terminal
+      placeholder: Fedora 45, GNOME Terminal
+    validations:
+      required: true
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else?
+      description: Screenshots, your config.toml, hardware details (GPU, laptop model)…

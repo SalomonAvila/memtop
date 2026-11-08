@@ -17,7 +17,10 @@ use std::{
 use anyhow::{Context, Result};
 use sysinfo::{Components, Disks, Networks, Pid, ProcessStatus, ProcessesToUpdate, System, Users};
 
-use crate::gpu::{self, Gpu};
+use crate::{
+    gpu::{self, Gpu},
+    i18n,
+};
 
 /// Segundos de historial que se guardan para las gráficas.
 pub const HISTORIAL: usize = 120;
@@ -204,7 +207,7 @@ pub struct Monitor {
 impl Monitor {
     /// Hace la primera lectura completa. Solo falla si el sistema no expone `/proc`.
     pub fn new() -> Result<Self> {
-        let mut sys = System::new_all().context("no se pudo leer la información del sistema")?;
+        let mut sys = System::new_all().context(i18n::t().sistema_sin_info)?;
         sys.refresh_all();
         let info = leer_info(&sys);
         let nombres_usuario = Users::new_with_refreshed_list()
@@ -212,11 +215,10 @@ impl Monitor {
             .unwrap_or_default();
 
         let mut m = Self {
-            discos_sys: Disks::new_with_refreshed_list()
-                .context("no se pudieron leer los discos")?,
-            redes: Networks::new_with_refreshed_list().context("no se pudo leer la red")?,
+            discos_sys: Disks::new_with_refreshed_list().context(i18n::t().sistema_sin_discos)?,
+            redes: Networks::new_with_refreshed_list().context(i18n::t().sistema_sin_red)?,
             componentes: Components::new_with_refreshed_list()
-                .context("no se pudieron leer los sensores")?,
+                .context(i18n::t().sistema_sin_sensores)?,
             nombres_usuario,
             ultimo: Instant::now(),
             info,

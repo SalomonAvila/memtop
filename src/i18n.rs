@@ -1,13 +1,17 @@
 //! Idioma de la interfaz y textos traducidos.
 //!
-//! El idioma se elige una vez al arrancar con [`fijar`], a partir de la opción
+//! El idioma se elige al arrancar con [`fijar`], a partir de la opción
 //! `--lang`, la clave `language` de la configuración o, si ambas son `auto`, del entorno
 //! ([`detectar`]). Los textos se obtienen con [`t`], que devuelve la tabla del idioma activo.
 //!
 //! Para añadir un texto: crea el campo en [`Textos`] y dale valor en [`ES`] y [`EN`].
 //! El compilador obliga a traducirlo en los dos idiomas.
 
-use std::{env, str::FromStr, sync::OnceLock};
+use std::{
+    env,
+    str::FromStr,
+    sync::atomic::{AtomicU8, Ordering},
+};
 
 use serde::Deserialize;
 
@@ -52,16 +56,33 @@ impl FromStr for Preferencia {
     }
 }
 
-static IDIOMA: OnceLock<Idioma> = OnceLock::new();
+/// Idioma activo: `0` = aún sin fijar (se detecta del entorno), `1` = español, `2` = inglés.
+///
+/// Se puede fijar más de una vez porque el idioma se va precisando al arrancar: primero el
+/// del entorno (errores de las opciones), luego el de `--lang` (errores del archivo de
+/// configuración) y por último el resultado de combinar archivo y opciones.
+static IDIOMA: AtomicU8 = AtomicU8::new(0);
 
-/// Fija el idioma de la interfaz. Se llama una vez al arrancar, antes del primer dibujo.
+/// Fija el idioma de los textos a partir de este momento.
 pub fn fijar(idioma: Idioma) {
-    let _ = IDIOMA.set(idioma);
+    let v = match idioma {
+        Idioma::Es => 1,
+        Idioma::En => 2,
+    };
+    IDIOMA.store(v, Ordering::Relaxed);
 }
 
 /// Idioma activo: el fijado con [`fijar`] o, si no se fijó, el del entorno.
 pub fn actual() -> Idioma {
-    *IDIOMA.get_or_init(detectar)
+    match IDIOMA.load(Ordering::Relaxed) {
+        1 => Idioma::Es,
+        2 => Idioma::En,
+        _ => {
+            let idioma = detectar();
+            fijar(idioma);
+            idioma
+        }
+    }
 }
 
 /// Textos del idioma activo.
@@ -278,6 +299,29 @@ pub struct Textos {
     pub ayuda_quitar_filtros: &'static str,
     pub ayuda_terminar: &'static str,
     pub ayuda_matar: &'static str,
+
+    // Línea de comandos (`--help` y errores antes de abrir la interfaz)
+    pub cli_ayuda: &'static str,
+    pub cli_prueba_ayuda: &'static str,
+    pub cli_falta_ruta: &'static str,
+    pub cli_falta_idioma: &'static str,
+    pub cli_idioma_invalido: &'static str,
+    pub cli_intervalo_invalido: &'static str,
+    pub cli_opcion_desconocida: &'static str,
+    pub cli_sin_terminal: &'static str,
+
+    // Errores del archivo de configuración
+    pub config_intervalo_minimo: &'static str,
+    pub config_color_invalido: &'static str,
+    pub config_color_formatos: &'static str,
+    pub config_no_se_pudo_leer: &'static str,
+    pub config_error_en: &'static str,
+
+    // Errores al leer el sistema
+    pub sistema_sin_info: &'static str,
+    pub sistema_sin_discos: &'static str,
+    pub sistema_sin_red: &'static str,
+    pub sistema_sin_sensores: &'static str,
 }
 
 pub const ES: Textos = Textos {
@@ -451,6 +495,50 @@ pub const ES: Textos = Textos {
     ayuda_quitar_filtros: "Quitar filtros",
     ayuda_terminar: "Terminar (SIGTERM), pide confirmación",
     ayuda_matar: "Matar (SIGKILL), pide confirmación",
+
+    // Línea de comandos
+    cli_ayuda: "\
+memtop — información del sistema y monitor de recursos en la terminal
+
+USO:
+    memtop [OPCIONES]
+
+OPCIONES:
+    -i, --interval SEG      Segundos entre actualizaciones (mínimo 0.2)
+    --lang IDIOMA           Idioma de la interfaz: auto (según LANG), en o es
+    -c, --config RUTA       Usar este archivo de configuración
+    --print-config          Imprimir una configuración de ejemplo comentada
+    -V, --version           Mostrar la versión
+    -h, --help              Mostrar esta ayuda
+
+CONFIGURACIÓN:
+    Se lee $XDG_CONFIG_HOME/memtop/config.toml (normalmente ~/.config/memtop/config.toml)
+    si existe. Las opciones de arriba tienen prioridad sobre el archivo. Para crearlo:
+
+        mkdir -p ~/.config/memtop && memtop --print-config > ~/.config/memtop/config.toml
+
+Dentro de memtop pulsa ? para ver todas las teclas.
+",
+    cli_prueba_ayuda: "Prueba `memtop --help`.",
+    cli_falta_ruta: "--config necesita una ruta",
+    cli_falta_idioma: "--lang necesita un valor: auto, en o es",
+    cli_idioma_invalido: "--lang solo admite auto, en o es",
+    cli_intervalo_invalido: "--interval necesita un número de segundos (mínimo 0.2)",
+    cli_opcion_desconocida: "opción desconocida",
+    cli_sin_terminal: "necesita ejecutarse en una terminal interactiva.",
+
+    // Errores del archivo de configuración
+    config_intervalo_minimo: "interval debe ser un número de segundos mayor o igual que",
+    config_color_invalido: "color no válido",
+    config_color_formatos: "usa un nombre como \"cyan\", \"#rrggbb\" o un número de 0 a 255",
+    config_no_se_pudo_leer: "no se pudo leer",
+    config_error_en: "error en",
+
+    // Errores al leer el sistema
+    sistema_sin_info: "no se pudo leer la información del sistema",
+    sistema_sin_discos: "no se pudieron leer los discos",
+    sistema_sin_red: "no se pudo leer la red",
+    sistema_sin_sensores: "no se pudieron leer los sensores",
 };
 
 pub const EN: Textos = Textos {
@@ -624,6 +712,50 @@ pub const EN: Textos = Textos {
     ayuda_quitar_filtros: "Clear filters",
     ayuda_terminar: "End (SIGTERM), asks for confirmation",
     ayuda_matar: "Kill (SIGKILL), asks for confirmation",
+
+    // Command line
+    cli_ayuda: "\
+memtop — system information and resource monitor for the terminal
+
+USAGE:
+    memtop [OPTIONS]
+
+OPTIONS:
+    -i, --interval SECS     Seconds between refreshes (minimum 0.2)
+    --lang LANG             Interface language: auto (from LANG), en or es
+    -c, --config PATH       Use this configuration file
+    --print-config          Print a commented example configuration
+    -V, --version           Show the version
+    -h, --help              Show this help
+
+CONFIGURATION:
+    $XDG_CONFIG_HOME/memtop/config.toml (usually ~/.config/memtop/config.toml) is read
+    if it exists. The options above take precedence over the file. To create it:
+
+        mkdir -p ~/.config/memtop && memtop --print-config > ~/.config/memtop/config.toml
+
+Inside memtop, press ? to see every key.
+",
+    cli_prueba_ayuda: "Try `memtop --help`.",
+    cli_falta_ruta: "--config needs a path",
+    cli_falta_idioma: "--lang needs a value: auto, en or es",
+    cli_idioma_invalido: "--lang only accepts auto, en or es",
+    cli_intervalo_invalido: "--interval needs a number of seconds (minimum 0.2)",
+    cli_opcion_desconocida: "unknown option",
+    cli_sin_terminal: "must be run in an interactive terminal.",
+
+    // Configuration file errors
+    config_intervalo_minimo: "interval must be a number of seconds greater than or equal to",
+    config_color_invalido: "invalid color",
+    config_color_formatos: "use a name like \"cyan\", \"#rrggbb\" or a number from 0 to 255",
+    config_no_se_pudo_leer: "could not read",
+    config_error_en: "error in",
+
+    // System read errors
+    sistema_sin_info: "could not read system information",
+    sistema_sin_discos: "could not read the disks",
+    sistema_sin_red: "could not read the network",
+    sistema_sin_sensores: "could not read the sensors",
 };
 
 #[cfg(test)]

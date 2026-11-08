@@ -75,6 +75,18 @@ file to verify the download:
 sha256sum -c "memtop-${arch}-unknown-linux-musl.tar.gz.sha256"
 ```
 
+### Fedora (COPR)
+
+memtop is packaged for Fedora 43, 44, 45 and Rawhide (`x86_64` and `aarch64`) in
+[COPR](https://copr.fedorainfracloud.org/coprs/mrmich/memtop/):
+
+```sh
+sudo dnf copr enable mrmich/memtop
+sudo dnf install memtop
+```
+
+Updates arrive with the rest of the system through `sudo dnf upgrade`.
+
 ### From source
 
 Requires Rust **1.95 or newer**, installed with [rustup](https://rustup.rs) (the Rust

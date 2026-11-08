@@ -117,7 +117,7 @@ pub struct App {
 impl App {
     /// Crea el estado inicial con la pestaña, el orden y el filtro de la configuración.
     pub fn new(monitor: Monitor, config: &Config) -> Self {
-        let orden = config.procesos.orden;
+        let orden = config.processes.sort;
         let mut app = Self {
             monitor,
             pestana: Pestana::Resumen,
@@ -128,13 +128,13 @@ impl App {
             orden_proc: orden,
             desc: orden.descendente_por_defecto(),
             busqueda: String::new(),
-            solo_mios: config.procesos.solo_mios,
+            solo_mios: config.processes.mine_only,
             logo: config.logo,
             sel_pid: None,
             mensaje: None,
         };
         // `ir_a` también activa la consulta de la GPU NVIDIA si se empieza en esa pestaña.
-        app.ir_a(config.pestana_inicial);
+        app.ir_a(config.start_tab);
         app.sincronizar_seleccion();
         app
     }

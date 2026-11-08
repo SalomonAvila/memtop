@@ -47,10 +47,10 @@ impl Opciones {
     /// Aplica sobre la configuración las opciones indicadas en la línea de comandos.
     fn aplicar(self, mut c: Config) -> Config {
         if let Some(i) = self.intervalo {
-            c.intervalo = i;
+            c.interval = i;
         }
         if let Some(i) = self.idioma {
-            c.idioma = i;
+            c.language = i;
         }
         c
     }
@@ -91,7 +91,7 @@ fn leer_opciones(args: impl IntoIterator<Item = String>) -> Result<(Accion, Opci
                 let s: f64 = args
                     .next()
                     .and_then(|v| v.replace(',', ".").parse().ok())
-                    .filter(|v: &f64| v.is_finite() && *v >= config::INTERVALO_MINIMO)
+                    .filter(|v: &f64| v.is_finite() && *v >= config::MIN_INTERVAL)
                     .ok_or(t.cli_invalid_interval)?;
                 o.intervalo = Some(s);
             }
@@ -125,12 +125,12 @@ fn main() -> ExitCode {
             return ExitCode::SUCCESS;
         }
         Accion::ConfigEjemplo => {
-            print!("{}", config::EJEMPLO);
+            print!("{}", config::EXAMPLE);
             return ExitCode::SUCCESS;
         }
     }
 
-    let config = match config::cargar(opciones.config.as_deref()) {
+    let config = match config::load(opciones.config.as_deref()) {
         Ok(c) => opciones.aplicar(c),
         Err(e) => {
             eprintln!("memtop: {e:#}");
@@ -139,7 +139,7 @@ fn main() -> ExitCode {
     };
 
     // Idioma definitivo: archivo de configuración y, por encima, `--lang`.
-    i18n::set(config.idioma.resolve());
+    i18n::set(config.language.resolve());
 
     if !stdout().is_terminal() {
         eprintln!("memtop: {}", i18n::t().cli_no_terminal);
@@ -156,7 +156,7 @@ fn main() -> ExitCode {
 }
 
 fn iniciar(config: Config) -> Result<()> {
-    ui::fijar_tema(config.colores.clone());
+    ui::fijar_tema(config.colors.clone());
     // Primera lectura antes de entrar a la interfaz: el uso de CPU necesita dos muestras.
     let monitor = sistema::Monitor::new()?;
 
@@ -164,7 +164,7 @@ fn iniciar(config: Config) -> Result<()> {
     // que restaura la terminal si el programa entra en pánico.
     let mut terminal = ratatui::init();
     let app = App::new(monitor, &config);
-    let resultado = ejecutar(&mut terminal, app, config.intervalo());
+    let resultado = ejecutar(&mut terminal, app, config.refresh_interval());
     ratatui::restore();
     resultado
 }
@@ -217,20 +217,19 @@ mod tests {
         let o = opciones(&["--lang", "en", "-i", "2,5", "-c", "/tmp/c.toml"]);
         assert_eq!(o.config, Some(PathBuf::from("/tmp/c.toml")));
         let c = o.aplicar(Config::default());
-        assert_eq!(c.idioma, i18n::LanguageSetting::En);
-        assert_eq!(c.intervalo(), Duration::from_millis(2500));
+        assert_eq!(c.language, i18n::LanguageSetting::En);
+        assert_eq!(c.refresh_interval(), Duration::from_millis(2500));
     }
 
     #[test]
     fn las_opciones_tienen_prioridad_sobre_el_archivo() {
         let archivo =
-            config::interpretar("language = \"es\"\ninterval = 5.0\nstart_tab = \"network\"")
-                .unwrap();
+            config::parse("language = \"es\"\ninterval = 5.0\nstart_tab = \"network\"").unwrap();
         let c = opciones(&["-i", "2", "--lang", "en"]).aplicar(archivo);
-        assert_eq!(c.intervalo, 2.0);
-        assert_eq!(c.idioma, i18n::LanguageSetting::En);
+        assert_eq!(c.interval, 2.0);
+        assert_eq!(c.language, i18n::LanguageSetting::En);
         // Lo que no se indicó en la línea de comandos sale del archivo.
-        assert_eq!(c.pestana_inicial, app::Pestana::Red);
+        assert_eq!(c.start_tab, app::Pestana::Red);
     }
 
     #[test]

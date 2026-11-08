@@ -23,7 +23,7 @@ use ratatui::{
 
 use crate::{
     app::{App, Modo, OrdenProc, Pestana},
-    config::Tema,
+    config::Theme,
     i18n,
     logo::Sprite,
     sistema::{
@@ -32,15 +32,15 @@ use crate::{
     },
 };
 
-static TEMA: OnceLock<Tema> = OnceLock::new();
+static TEMA: OnceLock<Theme> = OnceLock::new();
 
 /// Fija los colores de la interfaz. Se llama una vez al arrancar, antes del primer dibujo.
-pub fn fijar_tema(tema: Tema) {
+pub fn fijar_tema(tema: Theme) {
     let _ = TEMA.set(tema);
 }
 
-fn tema() -> &'static Tema {
-    TEMA.get_or_init(Tema::default)
+fn tema() -> &'static Theme {
+    TEMA.get_or_init(Theme::default)
 }
 
 // ───────────────────────────── utilidades ─────────────────────────────
@@ -49,10 +49,10 @@ fn bloque(titulo: impl Into<String>) -> Block<'static> {
     Block::default()
         .borders(Borders::ALL)
         .border_type(BorderType::Rounded)
-        .border_style(Style::new().fg(tema().tenue))
+        .border_style(Style::new().fg(tema().muted))
         .title(Span::styled(
             titulo.into(),
-            Style::new().fg(tema().acento).add_modifier(Modifier::BOLD),
+            Style::new().fg(tema().accent).add_modifier(Modifier::BOLD),
         ))
 }
 
@@ -101,29 +101,29 @@ fn barra_color(
     Line::from(vec![
         Span::styled(
             format!("{etiqueta:<ancho_etq$}"),
-            Style::new().fg(tema().etiqueta),
+            Style::new().fg(tema().label),
         ),
-        Span::styled("▕", Style::new().fg(tema().tenue)),
+        Span::styled("▕", Style::new().fg(tema().muted)),
         Span::styled("█".repeat(lleno), Style::new().fg(color)),
         Span::styled(
             "░".repeat(ancho_barra - lleno),
             Style::new().fg(Color::Rgb(55, 55, 65)),
         ),
-        Span::styled("▏", Style::new().fg(tema().tenue)),
+        Span::styled("▏", Style::new().fg(tema().muted)),
         Span::raw(format!(" {texto}")),
     ])
 }
 
 fn clave_valor(k: &str, v: impl Into<String>, ancho: usize) -> Line<'static> {
     Line::from(vec![
-        Span::styled(format!("{k:<ancho$}"), Style::new().fg(tema().etiqueta)),
+        Span::styled(format!("{k:<ancho$}"), Style::new().fg(tema().label)),
         Span::raw(v.into()),
     ])
 }
 
 fn clave_temp(k: &str, t: f32, ancho: usize) -> Line<'static> {
     Line::from(vec![
-        Span::styled(format!("{k:<ancho$}"), Style::new().fg(tema().etiqueta)),
+        Span::styled(format!("{k:<ancho$}"), Style::new().fg(tema().label)),
         Span::styled(format!("{t:.0} °C"), Style::new().fg(color_temp(t))),
     ])
 }
@@ -228,7 +228,7 @@ fn dibujar_pestanas(f: &mut Frame, app: &App, area: Rect) {
         .enumerate()
         .map(|(i, p)| {
             Line::from(vec![
-                Span::styled(format!("{} ", i + 1), Style::new().fg(tema().tenue)),
+                Span::styled(format!("{} ", i + 1), Style::new().fg(tema().muted)),
                 Span::raw(p.titulo()),
             ])
         })
@@ -258,10 +258,10 @@ fn dibujar_pestanas(f: &mut Frame, app: &App, area: Rect) {
         .highlight_style(
             Style::new()
                 .fg(Color::Black)
-                .bg(tema().acento)
+                .bg(tema().accent)
                 .add_modifier(Modifier::BOLD),
         )
-        .divider(Span::styled("│", Style::new().fg(tema().tenue)));
+        .divider(Span::styled("│", Style::new().fg(tema().muted)));
     f.render_widget(tabs, area);
 }
 
@@ -347,13 +347,13 @@ fn panel_sistema(app: &App) -> Vec<Line<'static>> {
     let w = 11;
     let mut l = vec![
         Line::from(vec![
-            Span::styled(i.usuario.clone(), negrita(tema().acento)),
+            Span::styled(i.usuario.clone(), negrita(tema().accent)),
             Span::raw("@"),
-            Span::styled(i.host.clone(), negrita(tema().acento)),
+            Span::styled(i.host.clone(), negrita(tema().accent)),
         ]),
         Line::styled(
             "─".repeat(i.usuario.chars().count() + i.host.chars().count() + 1),
-            Style::new().fg(tema().tenue),
+            Style::new().fg(tema().muted),
         ),
     ];
     if let Some(e) = &i.modelo {
@@ -467,7 +467,7 @@ fn tab_resumen(f: &mut Frame, app: &mut App, area: Rect) {
         Sparkline::default()
             .data(&v)
             .max(100)
-            .style(Style::new().fg(tema().acento)),
+            .style(Style::new().fg(tema().accent)),
         graf,
     );
 
@@ -527,12 +527,12 @@ fn tab_resumen(f: &mut Frame, app: &mut App, area: Rect) {
     let mut lineas = Vec::new();
     for g in &m.gpus {
         let estado = if g.is_suspended() {
-            Span::styled(t.gpu_idle, Style::new().fg(tema().tenue))
+            Span::styled(t.gpu_idle, Style::new().fg(tema().muted))
         } else {
             Span::styled(t.gpu_active, Style::new().fg(Color::Green))
         };
         lineas.push(Line::from(vec![
-            Span::styled(format!("{:<9}", t.gpu), Style::new().fg(tema().etiqueta)),
+            Span::styled(format!("{:<9}", t.gpu), Style::new().fg(tema().label)),
             Span::raw(format!("{} · ", g.name)),
             estado,
         ]));
@@ -542,10 +542,7 @@ fn tab_resumen(f: &mut Frame, app: &mut App, area: Rect) {
     }
     for i in &activas {
         lineas.push(Line::from(vec![
-            Span::styled(
-                format!("{:<9}", t.network),
-                Style::new().fg(tema().etiqueta),
-            ),
+            Span::styled(format!("{:<9}", t.network), Style::new().fg(tema().label)),
             Span::raw(format!("{:<12}", i.nombre)),
             Span::styled(
                 format!("↓ {:<13}", fmt_tasa(i.rx_bps)),
@@ -594,7 +591,7 @@ fn tabla_mini(f: &mut Frame, area: Rect, titulo: &str, lista: &[&Proceso], ram_t
     let t = i18n::t();
     let filas = lista.iter().map(|p| {
         Row::new(vec![
-            Cell::from(p.pid.to_string()).style(Style::new().fg(tema().tenue)),
+            Cell::from(p.pid.to_string()).style(Style::new().fg(tema().muted)),
             Cell::from(p.nombre.clone()),
             Cell::from(format!("{:5.1}", p.cpu)).style(Style::new().fg(color_pct(p.cpu as f64))),
             Cell::from(format!("{:5.1}", pct(p.memoria, ram_total)))
@@ -685,7 +682,7 @@ fn tab_cpu(f: &mut Frame, app: &mut App, area: Rect) {
         ),
         &m.hist_cpu,
         Some(100),
-        tema().acento,
+        tema().accent,
     );
 
     let [nucleos, temps] =
@@ -828,13 +825,13 @@ fn tab_almacenamiento(f: &mut Frame, app: &mut App, area: Rect) {
 
     let filas = m.discos.iter().map(|d| {
         Row::new(vec![
-            Cell::from(d.nombre.clone()).style(Style::new().fg(tema().acento)),
+            Cell::from(d.nombre.clone()).style(Style::new().fg(tema().accent)),
             Cell::from(d.modelo.clone().unwrap_or_else(|| "—".into())),
             Cell::from(d.tipo).style(Style::new().fg(Color::LightMagenta)),
             Cell::from(fmt_bytes(d.tamano)),
             match d.temperatura {
                 Some(t) => Cell::from(format!("{t:.0}°C")).style(Style::new().fg(color_temp(t))),
-                None => Cell::from("—").style(Style::new().fg(tema().tenue)),
+                None => Cell::from("—").style(Style::new().fg(tema().muted)),
             },
             Cell::from(fmt_tasa(d.lectura_bps)).style(Style::new().fg(Color::Green)),
             Cell::from(fmt_tasa(d.escritura_bps)).style(Style::new().fg(Color::Magenta)),
@@ -877,7 +874,7 @@ fn tab_almacenamiento(f: &mut Frame, app: &mut App, area: Rect) {
     for x in &m.montajes {
         let p = pct(x.usado, x.total);
         lineas.push(Line::from(vec![
-            Span::styled(x.punto.clone(), negrita(tema().acento)),
+            Span::styled(x.punto.clone(), negrita(tema().accent)),
             Span::styled(
                 format!("  {} · {}", x.dispositivo, x.fs),
                 Style::new().fg(Color::Gray),
@@ -917,7 +914,7 @@ fn tab_gpu(f: &mut Frame, app: &mut App, area: Rect) {
         let w = 13;
         let ancho = a.width.saturating_sub(2);
         let estado = match g.power_state.as_deref() {
-            Some("suspended") => Span::styled(tx.gpu_state_idle, Style::new().fg(tema().tenue)),
+            Some("suspended") => Span::styled(tx.gpu_state_idle, Style::new().fg(tema().muted)),
             Some("active") => Span::styled(tx.gpu_state_active, Style::new().fg(Color::Green)),
             Some(o) => Span::raw(o.to_string()),
             None => Span::raw("—"),
@@ -927,10 +924,7 @@ fn tab_gpu(f: &mut Frame, app: &mut App, area: Rect) {
             clave_valor(tx.driver, g.driver.clone().unwrap_or_else(|| "—".into()), w),
             clave_valor(tx.pci, g.address.clone(), w),
             Line::from(vec![
-                Span::styled(
-                    format!("{:<w$}", tx.state),
-                    Style::new().fg(tema().etiqueta),
-                ),
+                Span::styled(format!("{:<w$}", tx.state), Style::new().fg(tema().label)),
                 estado,
             ]),
         ];
@@ -960,12 +954,12 @@ fn tab_gpu(f: &mut Frame, app: &mut App, area: Rect) {
             l.push(clave_valor(tx.power, format!("{p:.1} W"), w));
         }
         if g.vendor.contains("NVIDIA") && g.usage.is_none() && !g.is_suspended() {
-            l.push(Line::styled(tx.gpu_querying, Style::new().fg(tema().tenue)));
+            l.push(Line::styled(tx.gpu_querying, Style::new().fg(tema().muted)));
         }
         if g.is_suspended() {
             l.push(Line::styled(
                 tx.gpu_not_waking,
-                Style::new().fg(tema().tenue).add_modifier(Modifier::ITALIC),
+                Style::new().fg(tema().muted).add_modifier(Modifier::ITALIC),
             ));
         }
         f.render_widget(Paragraph::new(l).block(bloque(format!(" {} ", g.name))), *a);
@@ -1001,9 +995,9 @@ fn tab_red(f: &mut Frame, app: &mut App, area: Rect) {
         let activa = !i.ips.is_empty();
         Row::new(vec![
             Cell::from(i.nombre.clone()).style(Style::new().fg(if activa {
-                tema().acento
+                tema().accent
             } else {
-                tema().tenue
+                tema().muted
             })),
             Cell::from(resumen_ips(&i.ips)),
             Cell::from(i.mac.clone()).style(Style::new().fg(Color::Gray)),
@@ -1108,7 +1102,7 @@ fn tab_procesos(f: &mut Frame, app: &mut App, area: Rect) {
             let mem_pct = pct(p.memoria, total_ram);
             let (dir, prog, args) = partes_comando(p);
             Row::new(vec![
-                Cell::from(p.pid.to_string()).style(Style::new().fg(tema().tenue)),
+                Cell::from(p.pid.to_string()).style(Style::new().fg(tema().muted)),
                 Cell::from(p.usuario.clone()).style(Style::new().fg(Color::Gray)),
                 Cell::from(format!("{:5.1}", p.cpu))
                     .style(Style::new().fg(color_pct(p.cpu as f64))),
@@ -1118,7 +1112,7 @@ fn tab_procesos(f: &mut Frame, app: &mut App, area: Rect) {
                 Cell::from(estado_proceso(p.estado)).style(Style::new().fg(Color::Gray)),
                 Cell::from(fmt_tiempo(p.tiempo)).style(Style::new().fg(Color::Gray)),
                 Cell::from(Line::from(vec![
-                    Span::styled(dir, Style::new().fg(tema().tenue)),
+                    Span::styled(dir, Style::new().fg(tema().muted)),
                     Span::styled(prog, Style::new().add_modifier(Modifier::BOLD)),
                     Span::styled(args, Style::new().fg(Color::Gray)),
                 ])),
@@ -1165,7 +1159,7 @@ fn tab_procesos(f: &mut Frame, app: &mut App, area: Rect) {
     .header(cab)
     .row_highlight_style(
         Style::new()
-            .bg(tema().seleccion)
+            .bg(tema().selection)
             .add_modifier(Modifier::BOLD),
     )
     .block(block);
@@ -1175,7 +1169,7 @@ fn tab_procesos(f: &mut Frame, app: &mut App, area: Rect) {
         let mut sb = ScrollbarState::new(n).position(app.tabla_proc.selected().unwrap_or(0));
         f.render_stateful_widget(
             Scrollbar::new(ScrollbarOrientation::VerticalRight)
-                .style(Style::new().fg(tema().tenue)),
+                .style(Style::new().fg(tema().muted)),
             area.inner(Margin {
                 vertical: 1,
                 horizontal: 0,
@@ -1235,7 +1229,7 @@ fn dibujar_pie(f: &mut Frame, app: &App, area: Rect) {
     for (k, d) in pares {
         spans.push(Span::styled(
             *k,
-            Style::new().fg(Color::Black).bg(tema().acento),
+            Style::new().fg(Color::Black).bg(tema().accent),
         ));
         spans.push(Span::styled(
             format!(" {d}  "),
@@ -1279,7 +1273,7 @@ fn dibujar_confirmar(f: &mut Frame, pid: u32, nombre: &str, forzar: bool) {
         Line::raw(""),
         Line::styled(
             format!(" {}", t.confirm_options),
-            Style::new().fg(tema().tenue),
+            Style::new().fg(tema().muted),
         ),
     ];
     let block = bloque(marco(t.confirm_title)).border_style(Style::new().fg(Color::Red));
@@ -1317,7 +1311,7 @@ fn dibujar_ayuda(f: &mut Frame) {
         l.push(Line::styled(format!(" {titulo}"), negrita(Color::Yellow)));
         for (k, d) in filas {
             l.push(Line::from(vec![
-                Span::styled(format!("   {k:<18}"), Style::new().fg(tema().acento)),
+                Span::styled(format!("   {k:<18}"), Style::new().fg(tema().accent)),
                 Span::raw(*d),
             ]));
         }

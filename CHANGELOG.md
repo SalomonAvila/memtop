@@ -7,6 +7,10 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- The terminal is shown as "ptyxis" instead of "ptyxis-agent" when memtop runs in Ptyxis.
+
 ## [0.2.0] - 2026-11-08
 
 ### Changed

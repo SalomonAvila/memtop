@@ -577,18 +577,26 @@ fn detect_terminal(sys: &System) -> Option<String> {
         let p = sys.process(pid)?;
         let name = p.name().to_string_lossy().into_owned();
         if !SKIP.contains(&name.as_str()) && pid != sysinfo::get_current_pid().ok()? {
-            // "tmux: server" → "tmux", "gnome-terminal-server" → "gnome-terminal".
-            let clean = name
-                .split(':')
-                .next()
-                .unwrap_or(&name)
-                .trim_end_matches("-server")
-                .to_string();
-            return Some(clean);
+            return Some(terminal_name(&name));
         }
         pid = p.parent()?;
     }
     None
+}
+
+/// Name of the terminal from the process that owns the shell, without the suffixes of the
+/// helper processes some terminals use:
+///
+/// - `"tmux: server"` → `"tmux"`
+/// - `"gnome-terminal-server"` → `"gnome-terminal"`
+/// - `"ptyxis-agent"` → `"ptyxis"` (Ptyxis starts shells through a helper process)
+fn terminal_name(process: &str) -> String {
+    let name = process.split(':').next().unwrap_or(process);
+    ["-server", "-agent"]
+        .iter()
+        .find_map(|suffix| name.strip_suffix(suffix))
+        .unwrap_or(name)
+        .to_string()
 }
 
 fn read_meminfo() -> Memory {
@@ -767,6 +775,15 @@ mod tests {
             "AMD Ryzen 7 PRO 7840U"
         );
         assert_eq!(clean_cpu("Apple M2"), "Apple M2");
+    }
+
+    #[test]
+    fn strips_terminal_helper_suffixes() {
+        assert_eq!(terminal_name("ptyxis-agent"), "ptyxis");
+        assert_eq!(terminal_name("gnome-terminal-server"), "gnome-terminal");
+        assert_eq!(terminal_name("tmux: server"), "tmux");
+        assert_eq!(terminal_name("kitty"), "kitty");
+        assert_eq!(terminal_name("konsole"), "konsole");
     }
 
     #[test]

@@ -2,6 +2,8 @@
 
 System information and resource monitor in a single terminal screen, for Linux.
 
+![memtop showing the Summary tab: system information on the left; CPU, memory, storage, GPU, network and the top processes on the right](docs/screenshot.png)
+
 memtop brings together two things that are usually separate tools: a summary of the machine
 (model, operating system, CPU, GPU, memory…) and a live monitor of CPU, memory, disks, GPU,
 network and processes. It is written in Rust with [ratatui](https://ratatui.rs) and ships as

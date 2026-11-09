@@ -358,3 +358,433 @@ impl App {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        config::ProcessSettings,
+        system::{Process, ProcessState},
+    };
+
+    const CURRENT_USER: &str = "tester";
+
+    fn process(pid: u32, user: &str, name: &str, command: &str, cpu: f32, memory: u64) -> Process {
+        Process {
+            pid,
+            user: user.to_string(),
+            name: name.to_string(),
+            command: command.to_string(),
+            cpu,
+            memory,
+            state: ProcessState::Sleeping,
+            cpu_time: 0,
+        }
+    }
+
+    fn fixture_processes() -> Vec<Process> {
+        vec![
+            process(30, "other", "beta", "Beta --input", 20.0, 200),
+            process(10, CURRENT_USER, "Alpha", "Python Worker.py", 20.0, 100),
+            process(20, "other", "gamma", "node Server.JS", 40.0, 200),
+            process(40, CURRENT_USER, "delta", "Worker --quiet", 10.0, 400),
+        ]
+    }
+
+    fn app() -> App {
+        app_with_config(Config {
+            start_tab: Tab::Processes,
+            ..Config::default()
+        })
+    }
+
+    fn app_with_config(config: Config) -> App {
+        App::new(
+            Monitor::for_test(CURRENT_USER, fixture_processes()),
+            &config,
+        )
+    }
+
+    fn key(app: &mut App, code: KeyCode) {
+        app.key(KeyEvent::new(code, KeyModifiers::NONE));
+    }
+
+    fn pids(app: &App) -> Vec<u32> {
+        app.processes().iter().map(|p| p.pid).collect()
+    }
+
+    fn search(app: &mut App, query: &str) {
+        key(app, KeyCode::Char('/'));
+        for _ in 0..app.search.chars().count() {
+            key(app, KeyCode::Backspace);
+        }
+        for c in query.chars() {
+            key(app, KeyCode::Char(c));
+        }
+        key(app, KeyCode::Enter);
+    }
+
+    #[test]
+    fn initializes_configured_interface_state_and_first_selection() {
+        let config = Config {
+            start_tab: Tab::Processes,
+            logo: true,
+            processes: ProcessSettings {
+                sort: ProcessSort::Memory,
+                mine_only: true,
+            },
+            ..Config::default()
+        };
+        let app = app_with_config(config);
+
+        assert_eq!(app.tab, Tab::Processes);
+        assert_eq!(app.mode, Mode::Normal);
+        assert!(!app.paused);
+        assert!(!app.quit);
+        assert!(app.logo);
+        assert_eq!(app.process_sort, ProcessSort::Memory);
+        assert!(app.descending);
+        assert_eq!(app.search, "");
+        assert!(app.mine_only);
+        assert_eq!(pids(&app), vec![40, 10]);
+        assert_eq!(app.selected_pid, Some(40));
+        assert_eq!(app.process_table.selected(), Some(0));
+    }
+
+    #[test]
+    fn sorts_all_columns_in_their_default_direction_and_reverses() {
+        let cases = [
+            (
+                KeyCode::Char('m'),
+                vec![40, 20, 30, 10],
+                vec![10, 20, 30, 40],
+            ),
+            (
+                KeyCode::Char('p'),
+                vec![10, 20, 30, 40],
+                vec![40, 30, 20, 10],
+            ),
+            (
+                KeyCode::Char('n'),
+                vec![10, 30, 40, 20],
+                vec![20, 40, 30, 10],
+            ),
+            (
+                KeyCode::Char('u'),
+                vec![20, 30, 10, 40],
+                vec![10, 40, 20, 30],
+            ),
+        ];
+
+        let initial = app();
+        assert_eq!(pids(&initial), vec![20, 10, 30, 40]);
+        assert_eq!(initial.process_sort, ProcessSort::Cpu);
+        assert!(initial.descending);
+        for (sort_key, default_order, reversed_order) in cases {
+            let mut app = app();
+            key(&mut app, sort_key);
+            assert_eq!(pids(&app), default_order, "{sort_key:?}");
+            assert_eq!(app.process_table.selected(), Some(0), "{sort_key:?}");
+            key(&mut app, sort_key);
+            assert_eq!(pids(&app), reversed_order, "{sort_key:?}");
+            assert_eq!(app.process_table.selected(), Some(0), "{sort_key:?}");
+        }
+    }
+
+    #[test]
+    fn cpu_sort_reverses_and_uses_pid_to_break_ties() {
+        let mut app = app();
+        assert_eq!(pids(&app), vec![20, 10, 30, 40]);
+
+        key(&mut app, KeyCode::Char('c'));
+
+        assert_eq!(pids(&app), vec![40, 10, 30, 20]);
+        assert!(!app.descending);
+    }
+
+    #[test]
+    fn memory_sort_uses_pid_to_break_ties() {
+        let mut app = app();
+        key(&mut app, KeyCode::Char('m'));
+
+        assert_eq!(pids(&app), vec![40, 20, 30, 10]);
+        assert!(app.descending);
+    }
+
+    #[test]
+    fn name_sort_uses_pid_to_break_case_insensitive_ties() {
+        let app = App::new(
+            Monitor::for_test(
+                CURRENT_USER,
+                vec![
+                    process(30, "other", "Chrome", "chrome", 0.0, 0),
+                    process(10, "other", "chrome", "chrome", 0.0, 0),
+                ],
+            ),
+            &Config {
+                start_tab: Tab::Processes,
+                processes: ProcessSettings {
+                    sort: ProcessSort::Name,
+                    ..ProcessSettings::default()
+                },
+                ..Config::default()
+            },
+        );
+
+        assert_eq!(pids(&app), vec![10, 30]);
+    }
+
+    #[test]
+    fn search_matches_name_command_pid_and_username_as_implemented() {
+        let mut app = app();
+
+        search(&mut app, "aLpH");
+        assert_eq!(pids(&app), vec![10]);
+
+        search(&mut app, "WORKER.PY");
+        assert_eq!(pids(&app), vec![10]);
+
+        search(&mut app, "20");
+        assert_eq!(pids(&app), vec![20]);
+        search(&mut app, "2");
+        assert!(app.processes().is_empty());
+
+        search(&mut app, "TESTER");
+        assert_eq!(pids(&app), vec![10, 40]);
+        search(&mut app, "test");
+        assert!(app.processes().is_empty());
+
+        search(&mut app, "");
+        assert_eq!(pids(&app), vec![20, 10, 30, 40]);
+    }
+
+    #[test]
+    fn search_combines_with_sorting_and_resets_selection() {
+        let mut app = app();
+        key(&mut app, KeyCode::Down);
+        assert_eq!(app.selected_pid, Some(10));
+
+        key(&mut app, KeyCode::Char('m'));
+        assert_eq!(app.selected_pid, Some(40));
+        search(&mut app, "worker");
+
+        assert_eq!(pids(&app), vec![40, 10]);
+        assert_eq!(app.selected_pid, Some(40));
+        assert_eq!(app.process_table.selected(), Some(0));
+    }
+
+    #[test]
+    fn mine_filter_toggles_and_clear_filters_resets_search_and_selection() {
+        let mut app = app();
+        key(&mut app, KeyCode::Down);
+        assert_eq!(app.selected_pid, Some(10));
+
+        key(&mut app, KeyCode::Char('o'));
+        assert!(app.mine_only);
+        assert_eq!(pids(&app), vec![10, 40]);
+        assert_eq!(app.selected_pid, Some(10));
+
+        key(&mut app, KeyCode::Char('o'));
+        assert!(!app.mine_only);
+        assert_eq!(pids(&app), vec![20, 10, 30, 40]);
+        assert_eq!(app.selected_pid, Some(20));
+
+        search(&mut app, "beta");
+        key(&mut app, KeyCode::Char('o'));
+        assert!(app.mine_only);
+        assert!(app.processes().is_empty());
+        assert_eq!(app.process_table.selected(), None);
+
+        key(&mut app, KeyCode::Char('x'));
+        assert!(!app.mine_only);
+        assert_eq!(app.search, "");
+        assert_eq!(pids(&app), vec![20, 10, 30, 40]);
+        assert_eq!(app.selected_pid, Some(20));
+        assert_eq!(app.process_table.selected(), Some(0));
+    }
+
+    #[test]
+    fn selection_moves_by_process_and_stays_with_pid_after_reordering() {
+        let mut app = app();
+        assert_eq!(app.selected_pid, Some(20));
+
+        key(&mut app, KeyCode::Down);
+        assert_eq!(app.selected_pid, Some(10));
+        key(&mut app, KeyCode::Up);
+        assert_eq!(app.selected_pid, Some(20));
+        key(&mut app, KeyCode::Up);
+        assert_eq!(app.selected_pid, Some(20));
+
+        key(&mut app, KeyCode::Down);
+        let selected_pid = app.selected_pid;
+        assert_eq!(pids(&app), vec![20, 10, 30, 40]);
+        assert_eq!(app.process_table.selected(), Some(1));
+
+        app.monitor.processes.reverse();
+        app.monitor
+            .processes
+            .iter_mut()
+            .find(|p| Some(p.pid) == selected_pid)
+            .unwrap()
+            .cpu = 60.0;
+        app.sync_selection();
+
+        assert_eq!(pids(&app), vec![10, 20, 30, 40]);
+        assert_eq!(app.selected_pid, selected_pid);
+        assert_eq!(app.process_table.selected(), Some(0));
+        assert_eq!(app.processes()[0].pid, 10);
+    }
+
+    #[test]
+    fn selection_falls_back_when_selected_process_disappears() {
+        let mut app = app();
+        key(&mut app, KeyCode::Down);
+        assert_eq!(app.selected_pid, Some(10));
+        app.monitor.processes.retain(|p| p.pid != 10);
+
+        app.sync_selection();
+
+        assert_eq!(app.selected_pid, Some(30));
+        assert_eq!(app.process_table.selected(), Some(1));
+    }
+
+    #[test]
+    fn selection_resets_after_search_sort_and_filter_changes() {
+        let mut app = app();
+        key(&mut app, KeyCode::Down);
+        key(&mut app, KeyCode::Down);
+        assert_eq!(app.selected_pid, Some(30));
+
+        search(&mut app, "worker");
+        assert_eq!(pids(&app), vec![10, 40]);
+        assert_eq!(app.selected_pid, Some(10));
+
+        key(&mut app, KeyCode::Char('m'));
+        assert_eq!(app.selected_pid, Some(40));
+
+        key(&mut app, KeyCode::Char('x'));
+        key(&mut app, KeyCode::Down);
+        assert_eq!(app.selected_pid, Some(20));
+        key(&mut app, KeyCode::Char('o'));
+        assert_eq!(pids(&app), vec![40, 10]);
+        assert_eq!(app.selected_pid, Some(40));
+        assert_eq!(app.process_table.selected(), Some(0));
+    }
+
+    #[test]
+    fn selection_resets_to_first_match_when_search_changes() {
+        let mut app = app();
+        key(&mut app, KeyCode::Down);
+        key(&mut app, KeyCode::Down);
+        assert_eq!(app.selected_pid, Some(30));
+
+        search(&mut app, "worker");
+        assert_eq!(pids(&app), vec![10, 40]);
+        assert_eq!(app.selected_pid, Some(10));
+        assert_eq!(app.process_table.selected(), Some(0));
+    }
+
+    #[test]
+    fn empty_results_and_out_of_range_selection_are_handled() {
+        let mut app = app();
+        search(&mut app, "missing");
+        assert!(app.processes().is_empty());
+        assert_eq!(app.selected_pid, None);
+        assert_eq!(app.process_table.selected(), None);
+        key(&mut app, KeyCode::Down);
+        assert_eq!(app.process_table.selected(), None);
+
+        app.search.clear();
+        app.process_table.select(Some(usize::MAX));
+        app.sync_selection();
+        assert_eq!(app.selected_pid, Some(40));
+        assert_eq!(app.process_table.selected(), Some(3));
+    }
+
+    #[test]
+    fn empty_process_list_keeps_selection_clear_during_navigation_and_filters() {
+        let mut app = App::new(
+            Monitor::for_test(CURRENT_USER, Vec::new()),
+            &Config {
+                start_tab: Tab::Processes,
+                ..Config::default()
+            },
+        );
+        assert_eq!(app.process_table.selected(), None);
+        assert_eq!(app.selected_pid, None);
+
+        for code in [
+            KeyCode::Down,
+            KeyCode::Up,
+            KeyCode::Char('o'),
+            KeyCode::Char('x'),
+        ] {
+            key(&mut app, code);
+            assert_eq!(app.process_table.selected(), None);
+            assert_eq!(app.selected_pid, None);
+        }
+    }
+
+    #[test]
+    fn tab_navigation_supports_keys_and_wraps_in_both_directions() {
+        let mut app = app_with_config(Config::default());
+        assert_eq!(app.tab, Tab::Summary);
+        key(&mut app, KeyCode::Tab);
+        assert_eq!(app.tab, Tab::Cpu);
+        key(&mut app, KeyCode::BackTab);
+        assert_eq!(app.tab, Tab::Summary);
+        key(&mut app, KeyCode::Right);
+        assert_eq!(app.tab, Tab::Cpu);
+        key(&mut app, KeyCode::Left);
+        assert_eq!(app.tab, Tab::Summary);
+
+        for (number, tab) in ('1'..='7').zip(Tab::ALL) {
+            key(&mut app, KeyCode::Char(number));
+            assert_eq!(app.tab, tab);
+        }
+        key(&mut app, KeyCode::Tab);
+        assert_eq!(app.tab, Tab::Summary);
+        key(&mut app, KeyCode::BackTab);
+        assert_eq!(app.tab, Tab::Processes);
+    }
+
+    #[test]
+    fn help_dialog_returns_to_normal_mode_after_a_key() {
+        let mut app = app();
+        key(&mut app, KeyCode::Char('?'));
+        assert_eq!(app.mode, Mode::Help);
+        key(&mut app, KeyCode::Char('x'));
+        assert_eq!(app.mode, Mode::Normal);
+        assert_eq!(app.search, "");
+    }
+
+    #[test]
+    fn termination_dialogs_open_and_can_be_dismissed_safely() {
+        let mut app = app();
+        key(&mut app, KeyCode::Char('t'));
+        assert_eq!(
+            app.mode,
+            Mode::Confirm {
+                pid: 20,
+                name: "gamma".to_string(),
+                force: false,
+            }
+        );
+        key(&mut app, KeyCode::Esc);
+        assert_eq!(app.mode, Mode::Normal);
+        assert!(app.notice.is_none());
+
+        key(&mut app, KeyCode::Char('K'));
+        assert_eq!(
+            app.mode,
+            Mode::Confirm {
+                pid: 20,
+                name: "gamma".to_string(),
+                force: true,
+            }
+        );
+        key(&mut app, KeyCode::Char('n'));
+        assert_eq!(app.mode, Mode::Normal);
+        assert!(app.notice.is_none());
+    }
+}

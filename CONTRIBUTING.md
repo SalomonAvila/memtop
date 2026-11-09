@@ -56,7 +56,9 @@ approves each CI run before it starts.
 - **User-visible text** goes through `src/i18n.rs`: add a field to `Texts` and give it a value
   in both `ES` and `EN` (the compiler enforces it). Never hardcode interface text.
 - **Configuration keys and CLI flags** are part of the public interface. Changing or removing
-  one is a breaking change and needs to be discussed in an issue first.
+  one is a breaking change and needs to be discussed in an issue first. See the README's
+  [compatibility policy](README.md#compatibility-policy) for the scope of semantic-versioning
+  guarantees.
 - **Changelog:** add an entry under `Unreleased` in [CHANGELOG.md](CHANGELOG.md) for any
   change users will notice.
 - **Tests:** add or update tests for logic you change (parsing, formatting, config…).

@@ -15,6 +15,7 @@ The interface and messages are available in English and Spanish (see [`--lang`](
 - [Installation](#installation)
 - [Usage](#usage)
 - [Configuration](#configuration)
+- [Compatibility policy](#compatibility-policy)
 - [Keys](#keys)
 - [Data and permissions](#data-and-permissions)
 - [Troubleshooting](#troubleshooting)
@@ -199,6 +200,15 @@ unknown field `intervals`, expected one of `language`, `interval`, `start_tab`, 
 
 Upgrading from 0.1.x? The flags and configuration keys were renamed; see the
 [changelog](CHANGELOG.md).
+
+## Compatibility policy
+
+Starting with version 1.0, semantic versioning guarantees compatibility for command-line
+flags, configuration keys and values, and exit codes within a major version. Changes that
+break compatibility in these areas require a new major version.
+
+Semantic versioning does not guarantee stability of the screen layout, colors, interface
+text and translations, or the order of rows.
 
 ## Keys
 

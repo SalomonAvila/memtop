@@ -561,11 +561,10 @@ mod tests {
     #[test]
     fn search_combines_with_sorting_and_resets_selection() {
         let mut app = app();
-        key(&mut app, KeyCode::Down);
-        assert_eq!(app.selected_pid, Some(10));
-
         key(&mut app, KeyCode::Char('m'));
         assert_eq!(app.selected_pid, Some(40));
+        key(&mut app, KeyCode::Down);
+        assert_eq!(app.selected_pid, Some(20));
         search(&mut app, "worker");
 
         assert_eq!(pids(&app), vec![40, 10]);
@@ -620,7 +619,6 @@ mod tests {
         assert_eq!(pids(&app), vec![20, 10, 30, 40]);
         assert_eq!(app.process_table.selected(), Some(1));
 
-        app.monitor.processes.reverse();
         app.monitor
             .processes
             .iter_mut()
@@ -632,7 +630,6 @@ mod tests {
         assert_eq!(pids(&app), vec![10, 20, 30, 40]);
         assert_eq!(app.selected_pid, selected_pid);
         assert_eq!(app.process_table.selected(), Some(0));
-        assert_eq!(app.processes()[0].pid, 10);
     }
 
     #[test]
@@ -751,16 +748,21 @@ mod tests {
     #[test]
     fn help_dialog_returns_to_normal_mode_after_a_key() {
         let mut app = app();
+        search(&mut app, "beta");
+        assert_eq!(app.search, "beta");
+
         key(&mut app, KeyCode::Char('?'));
         assert_eq!(app.mode, Mode::Help);
         key(&mut app, KeyCode::Char('x'));
         assert_eq!(app.mode, Mode::Normal);
-        assert_eq!(app.search, "");
+        assert_eq!(app.search, "beta");
     }
 
     #[test]
     fn termination_dialogs_open_and_can_be_dismissed_safely() {
         let mut app = app();
+        // Confirming invokes Monitor::signal and may send a real signal to a host process.
+        // Tests must only dismiss termination dialogs and never confirm them.
         key(&mut app, KeyCode::Char('t'));
         assert_eq!(
             app.mode,

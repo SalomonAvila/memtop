@@ -205,6 +205,58 @@ pub struct Monitor {
 }
 
 impl Monitor {
+    #[cfg(test)]
+    pub(crate) fn for_test(user: &str, processes: Vec<Process>) -> Self {
+        Self {
+            sys: System::new().expect("empty system state should initialize"),
+            sys_disks: Disks::new().expect("empty disk state should initialize"),
+            networks: Networks::new().expect("empty network state should initialize"),
+            components: Components::new().expect("empty component state should initialize"),
+            user_names: HashMap::new(),
+            last_refresh: Instant::now(),
+            info: Info {
+                user: user.to_string(),
+                host: String::new(),
+                model: None,
+                os: String::new(),
+                kernel: String::new(),
+                desktop: None,
+                shell: None,
+                terminal: None,
+                cpu_model: String::new(),
+                physical_cores: None,
+                threads: 0,
+                arch: String::new(),
+            },
+            gpus: Vec::new(),
+            cpu_total: 0.0,
+            cpu_per_thread: Vec::new(),
+            cpu_freq_mhz: Vec::new(),
+            load: (0.0, 0.0, 0.0),
+            uptime: 0,
+            memory: Memory {
+                total: 0,
+                available: 0,
+                free: 0,
+                buffers: 0,
+                cache: 0,
+                shared: 0,
+                swap_total: 0,
+                swap_free: 0,
+            },
+            disks: Vec::new(),
+            mounts: Vec::new(),
+            interfaces: Vec::new(),
+            processes,
+            temperatures: Vec::new(),
+            battery: None,
+            hist_cpu: VecDeque::new(),
+            hist_ram: VecDeque::new(),
+            hist_rx: VecDeque::new(),
+            hist_tx: VecDeque::new(),
+        }
+    }
+
     /// Takes the first full reading. It only fails if the system does not expose `/proc`.
     pub fn new() -> Result<Self> {
         let mut sys = System::new_all().context(i18n::t().system_no_info)?;
